@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* DESIGN-SYSTEM.md tokens — single source of truth, mirrored in tailwind.config.ts */
+:root {
+  /* Canvas & surfaces */
+  --bg-canvas: #c9ccf1;
+  --bg-app: #ffffff;
+  --bg-sidebar: #ffffff;
+  --bg-subtle: #f6f7fd;
+  --bg-promo: #e3e5fa;
+
+  /* Brand */
+  --primary: #5a60ea;
+  --primary-hover: #4a50d8;
+  --primary-soft: #edeefc;
+
+  /* Text */
+  --text-primary: #1f2233;
+  --text-secondary: #8a8fa8;
+  --text-on-primary: #ffffff;
+
+  /* Lines & states */
+  --border: #ecedf5;
+  --border-dashed: #c9ccf1;
+  --success: #4cc38a;
+  --danger: #e5484d;
+  --overlay-scrim: rgba(31, 34, 51, 0.55);
+
+  /* Upsell intensity */
+  --upsell-1: #f6f7fd;
+  --upsell-3: #e3e5fa;
+  --upsell-5: #5a60ea;
+
+  /* Shape & elevation */
+  --radius-app: 24px;
+  --radius-card: 16px;
+  --radius-input: 10px;
+  --radius-btn: 10px;
+  --radius-pill: 999px;
+  --shadow-card: 0 4px 20px rgba(90, 96, 234, 0.08);
+  --shadow-float: 0 16px 40px rgba(31, 34, 51, 0.1);
+}
+
+body {
+  background: var(--bg-canvas);
+  font-family: var(--font-inter), "Inter", -apple-system, sans-serif;
+}
+
+/* Striped placeholder fill (stands in for real media) */
+.placeholder-stripes {
+  background-color: #e3e5fa;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(90, 96, 234, 0.07) 0px,
+    rgba(90, 96, 234, 0.07) 14px,
+    transparent 14px,
+    transparent 28px
+  );
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8daf3;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
