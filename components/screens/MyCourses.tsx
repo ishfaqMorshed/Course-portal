@@ -1,29 +1,26 @@
 "use client";
 
-import { FIXTURES } from "@/lib/fixtures";
-import { computeStats } from "@/lib/course";
 import Placeholder from "@/components/ui/Placeholder";
 import ProgressPill from "@/components/ui/ProgressPill";
 import { BtnPrimary } from "@/components/ui/Buttons";
 import { IconArrowRight, IconBookOpen } from "@/components/icons";
-import type { Course, ProgressMap } from "@/lib/types";
+import type { EnrolledCourse } from "@/lib/queries";
 
-const FX = FIXTURES;
-
-// S2b — My Courses (left-aligned grid in shell).
+// S2b — My Courses (left-aligned grid in shell). Phase 2: real enrolled courses
+// from get_enrolled_courses(). Visual structure unchanged from the design export.
 export default function MyCourses({
-  progressMap,
+  enrolledCourses,
   onOpenCourse,
-  emptyState,
+  emptyStateOverride,
 }: {
-  progressMap: ProgressMap;
-  onOpenCourse: (c: Course) => void;
-  emptyState: boolean;
+  enrolledCourses: EnrolledCourse[];
+  onOpenCourse: (c: EnrolledCourse) => void;
+  emptyStateOverride: boolean;
 }) {
-  const stats = computeStats(progressMap);
+  const empty = emptyStateOverride || enrolledCourses.length === 0;
   return (
     <div className="px-6 lg:px-9 py-7">
-      {emptyState ? (
+      {empty ? (
         <div className="border-[1.5px] border-dashed border-canvasDeep rounded-2xl p-12 flex flex-col items-center text-center gap-3 max-w-[520px]">
           <div className="w-12 h-12 rounded-full bg-subtle text-textSecondary flex items-center justify-center"><IconBookOpen size={22} /></div>
           <div className="text-[15px] font-semibold text-textPrimary">No courses yet</div>
@@ -31,22 +28,21 @@ export default function MyCourses({
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-[1000px]">
-          {FX.courses.map((c) => (
+          {enrolledCourses.map((c) => (
             <div key={c.id} className="bg-white border border-line rounded-2xl shadow-card overflow-hidden flex flex-col">
-              <Placeholder label={c.coverLabel} className="aspect-[16/9]" />
+              <Placeholder label="course cover" className="aspect-[16/9]" />
               <div className="p-5 flex flex-col gap-4 flex-1">
                 <div>
                   <h3 className="text-[15px] font-semibold text-textPrimary leading-snug">{c.title}</h3>
-                  <p className="text-xs text-textSecondary mt-1 leading-4">{c.subtitle}</p>
                 </div>
                 <div className="mt-auto flex flex-col gap-2">
                   <div className="flex items-center justify-between text-xs text-textSecondary">
-                    <span>{stats.completed} of {stats.total} lessons</span>
-                    <span className="font-semibold text-textPrimary">{stats.pct}%</span>
+                    <span>{c.completedLessons} of {c.totalLessons} lessons</span>
+                    <span className="font-semibold text-textPrimary">{c.pct}%</span>
                   </div>
-                  <ProgressPill pct={stats.pct} />
+                  <ProgressPill pct={c.pct} />
                   <BtnPrimary onClick={() => onOpenCourse(c)} className="w-full mt-2">
-                    {stats.pct === 0 ? "Start course" : stats.pct >= 100 ? "Review course" : "Continue"} <IconArrowRight size={16} />
+                    {c.pct === 0 ? "Start course" : c.pct >= 100 ? "Review course" : "Continue"} <IconArrowRight size={16} />
                   </BtnPrimary>
                 </div>
               </div>

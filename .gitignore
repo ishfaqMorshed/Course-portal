@@ -22,6 +22,11 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# supabase cli local state / function env
+supabase/.temp/
+supabase/.branches/
+supabase/functions/.env
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

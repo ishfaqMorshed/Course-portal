@@ -80,7 +80,7 @@ p.on('loaded', () => p.setCurrentTime(last_position));     // resume
 | `wh-purchase-47` | GHL webhook | upsert user+profile (store ghl_contact_id) · enrollment · segment=never_activated+tag · generate magic setup link · return it to GHL (or write to contact custom field) |
 | `wh-purchase-497` | GHL webhook | segment=dfy_purchased · remove old tag, add dfy tag |
 | `sync-segment-tag` | Postgres trigger via pg_net | GHL API v2: add new tag, remove old, write ghl_sync_log; retry/backoff on 429/5xx |
-| `push-lesson-event` | rpc complete_lesson | POST {contact_id, course, module, lesson, completed_at} to GHL_LESSON_EVENT_WEBHOOK_URL |
+| `push-lesson-event` | rpc complete_lesson | POST {email, contact_id, course, module, lesson, lesson_id, completed_at} to GHL_LESSON_EVENT_WEBHOOK_URL. **email is MANDATORY — GHL inbound webhooks resolve the contact by email, NOT contact_id (confirmed in testing). GHL workflow: Inbound Webhook → Find Contact (by email) → Add Note.** |
 
 Both webhooks: verify shared secret header; idempotency key = GHL event id (store in ghl_sync_log; duplicate → 200 no-op).
 

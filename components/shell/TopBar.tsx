@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FIXTURES } from "@/lib/fixtures";
+import { useCurrentUser } from "@/lib/current-user";
 import { IconBell, IconChevronLeft, IconLogOut, IconMenu, IconSearch } from "@/components/icons";
-
-const F = FIXTURES;
 
 export default function TopBar({
   title,
@@ -22,6 +20,7 @@ export default function TopBar({
   onMenu?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const user = useCurrentUser();
   return (
     <div className="flex items-center justify-between gap-4 px-6 lg:px-9 h-[76px] shrink-0 border-b border-line">
       <div className="flex items-center gap-3 min-w-0">
@@ -48,15 +47,15 @@ export default function TopBar({
         </button>
         <button onClick={() => setMenuOpen(!menuOpen)}
           className="w-9 h-9 rounded-full bg-promo text-primary text-xs font-bold flex items-center justify-center ml-1 ring-2 ring-transparent hover:ring-primarySoft">
-          {F.user.initials}
+          {user.initials}
         </button>
         {menuOpen && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)}></div>
             <div className="absolute right-0 top-12 bg-white rounded-2xl shadow-float border border-line p-2 w-52 z-40">
               <div className="px-3 py-2">
-                <div className="text-sm font-semibold text-textPrimary">{F.user.name}</div>
-                <div className="text-xs text-textSecondary">{F.user.email}</div>
+                <div className="text-sm font-semibold text-textPrimary">{user.name}</div>
+                <div className="text-xs text-textSecondary">{user.email}</div>
               </div>
               <div className="h-px bg-line my-1"></div>
               <button onClick={() => { setMenuOpen(false); onLogout(); }}

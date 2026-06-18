@@ -1,12 +1,20 @@
 import AppRoot from "@/components/AppRoot";
+import { getCurrentUser, getEnrolledCourses } from "@/lib/queries";
 
-// Dev/Tweaks controls (TweaksPanel, login dev bar, in-course ad-trigger hint)
-// render only when ?dev=1 is present.
-export default function Page({
+// Server auth gate. No session → login. Session → app (dashboard) with the
+// real user identity + enrolled courses. Dev/Tweaks controls keyed off ?dev=1.
+export default async function Page({
   searchParams,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
 }) {
   const dev = searchParams?.dev === "1";
-  return <AppRoot dev={dev} />;
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return <AppRoot dev={dev} authed={false} />;
+  }
+
+  const enrolledCourses = await getEnrolledCourses();
+  return <AppRoot dev={dev} authed initialUser={user} enrolledCourses={enrolledCourses} />;
 }

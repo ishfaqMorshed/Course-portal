@@ -1,31 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FIXTURES } from "@/lib/fixtures";
+import { createClient } from "@/lib/supabase/client";
 import { IconMail, IconZap } from "@/components/icons";
 
-const FX = FIXTURES;
-
-// dev-only bar (gated by ?dev=1 via the `dev` prop on LoginScreen).
-function LoginDevBar({ onFillEmail, onSimulate, onSkip }: { onFillEmail: () => void; onSimulate: () => void; onSkip: () => void }) {
+// dev-only bar (gated by ?dev=1). Phase 2: real auth means we can't fabricate a
+// session, so this is just a convenience prefill of the test buyer's email.
+function LoginDevBar({ onFillEmail }: { onFillEmail: () => void }) {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 bg-textPrimary text-white/50 font-mono text-[11px] leading-none">
       <div className="flex items-center justify-center gap-2 px-4 py-2 flex-wrap">
         <span>dev:</span>
-        <button onClick={onFillEmail} className="text-white/80 underline underline-offset-2 hover:text-white">sam@demo.com</button>
-        <span>is enrolled · any other email → error ·</span>
-        <button onClick={onSimulate} className="text-white/80 underline underline-offset-2 hover:text-white">simulate welcome link (S1b)</button>
-        <span>·</span>
-        <button onClick={onSkip} className="text-white/80 underline underline-offset-2 hover:text-white">skip to dashboard</button>
+        <button onClick={onFillEmail} className="text-white/80 underline underline-offset-2 hover:text-white">prefill test email</button>
+        <span>· enrolled email → magic link · unknown email → not-enrolled error</span>
       </div>
     </div>
   );
 }
 
-// S1 — Login / Access (only screen WITHOUT shell). + S1b setup landing.
-export default function LoginScreen({ onLogin, dev }: { onLogin: () => void; dev: boolean }) {
+// S1 — Login / Access (only screen WITHOUT shell). Real Supabase magic-link OTP.
+export default function LoginScreen({ dev }: { dev: boolean }) {
   const [email, setEmail] = useState("");
-  const [state, setState] = useState<"default" | "sending" | "sent" | "error" | "setup">("default");
+  const [state, setState] = useState<"default" | "sending" | "sent" | "error">("default");
   const [errorMsg, setErrorMsg] = useState("");
   const [resendIn, setResendIn] = useState(30);
 
@@ -36,31 +32,31 @@ export default function LoginScreen({ onLogin, dev }: { onLogin: () => void; dev
     return () => clearInterval(iv);
   }, [state]);
 
-  const send = () => {
+  // Magic-link send. shouldCreateUser:false → only enrolled (pre-created) users
+  // get a link; everyone else surfaces the "not enrolled" error (CONNECTION-MAP §1).
+  const send = async () => {
     const e = email.trim().toLowerCase();
-    if (!e || !e.includes("@")) { setState("error"); setErrorMsg("That doesn't look like an email address."); return; }
+    if (!e || !e.includes("@")) {
+      setState("error");
+      setErrorMsg("That doesn't look like an email address.");
+      return;
+    }
     setState("sending");
-    setTimeout(() => {
-      if (FX.login.enrolledEmails.includes(e)) setState("sent");
-      else { setState("error"); setErrorMsg("We couldn't find an enrollment for that email. Check the address you bought with."); }
-    }, 1200);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOtp({
+      email: e,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      setState("error");
+      setErrorMsg("We couldn't find an enrollment for that email. Check the address you bought with.");
+      return;
+    }
+    setState("sent");
   };
-  const simulateWelcomeLink = () => { setState("setup"); setTimeout(onLogin, 2000); };
-
-  if (state === "setup") {
-    return (
-      <div data-screen-label="S1b First-time setup" className="min-h-screen flex items-center justify-center p-6">
-        <div className="bg-white rounded-3xl shadow-float p-10 w-full max-w-[420px] flex flex-col items-center text-center gap-5">
-          <div className="w-12 h-12 rounded-2xl bg-primary text-white flex items-center justify-center"><IconZap size={22} strokeWidth={2} /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-textPrimary leading-8">Welcome aboard!</h1>
-            <p className="text-sm text-textSecondary mt-2">Setting up your access…</p>
-          </div>
-          <div className="w-7 h-7 rounded-full border-2 border-primarySoft border-t-primary animate-spin"></div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div data-screen-label="S1 Login" className="min-h-screen flex bg-white">
@@ -115,7 +111,7 @@ export default function LoginScreen({ onLogin, dev }: { onLogin: () => void; dev
                   {resendIn > 0 ? (
                     <span>Resend in {resendIn}s</span>
                   ) : (
-                    <button onClick={() => setResendIn(30)} className="font-semibold text-primary hover:text-primaryHover transition-colors duration-150">Resend link</button>
+                    <button onClick={send} className="font-semibold text-primary hover:text-primaryHover transition-colors duration-150">Resend link</button>
                   )}
                 </div>
                 <button onClick={() => { setState("default"); setEmail(""); }} className="text-[13px] font-semibold text-primary hover:text-primaryHover transition-colors duration-150">Use a different email</button>
@@ -162,9 +158,7 @@ export default function LoginScreen({ onLogin, dev }: { onLogin: () => void; dev
         </div>
       </div>
 
-      {dev && (
-        <LoginDevBar onFillEmail={() => { setEmail("sam@demo.com"); setState("default"); }} onSimulate={simulateWelcomeLink} onSkip={onLogin} />
-      )}
+      {dev && <LoginDevBar onFillEmail={() => { setEmail("nakibworkspace@gmail.com"); setState("default"); }} />}
     </div>
   );
 }

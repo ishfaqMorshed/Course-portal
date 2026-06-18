@@ -1,14 +1,20 @@
 "use client";
 
 // ============================================================
-// AppRoot.tsx — ports the export's inline App() state machine.
-// Screen state (no routing) mirrors the approved design 1:1. Dev affordances
-// (TweaksPanel, login dev bar, in-course ad-trigger hint) are gated by ?dev=1.
+// AppRoot.tsx — screen state machine (ported from the design export's App()).
+// Phase 2: auth-gated. When authed, starts on the dashboard and renders the
+// shell; My Courses + the shell identity come from real data. Dashboard /
+// CourseView / Resources remain on fixtures (Phase 2 = EXIT-minimal reads).
+// Dev affordances stay behind ?dev=1.
 // ============================================================
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FIXTURES } from "@/lib/fixtures";
 import { computeStats, initialProgress, moduleOf, type ProgressMap } from "@/lib/course";
+import { createClient } from "@/lib/supabase/client";
+import { CurrentUserProvider } from "@/lib/current-user";
+import type { CurrentUser, EnrolledCourse } from "@/lib/queries";
 import AppShell from "@/components/shell/AppShell";
 import LoginScreen from "@/components/screens/LoginScreen";
 import Dashboard from "@/components/screens/Dashboard";
@@ -43,14 +49,26 @@ interface ShellProps {
   backLabel?: string;
 }
 
-export default function AppRoot({ dev }: { dev: boolean }) {
+export default function AppRoot({
+  dev,
+  authed,
+  initialUser,
+  enrolledCourses = [],
+}: {
+  dev: boolean;
+  authed: boolean;
+  initialUser?: CurrentUser | null;
+  enrolledCourses?: EnrolledCourse[];
+}) {
+  const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [screen, setScreen] = useState<Screen>("login");
+  const [screen, setScreen] = useState<Screen>(authed ? "dashboard" : "login");
   const [progressMap, setProgressMap] = useState<ProgressMap>(initialProgress);
   const [currentLessonId, setCurrentLessonId] = useState<string>(FIXTURES.courses[0].lastLessonId);
   const [adSignal, setAdSignal] = useState(0);
 
   const F = FIXTURES;
+  const displayName = initialUser?.name ?? F.user.name;
   const setLessonPct = (id: string, pct: number) => setProgressMap((m) => ({ ...m, [id]: pct }));
 
   const completeAll = () => {
@@ -60,11 +78,16 @@ export default function AppRoot({ dev }: { dev: boolean }) {
     setScreen("course");
   };
   const resetProgress = () => setProgressMap(initialProgress());
-
   const openLesson = (id: string) => { setCurrentLessonId(id); setScreen("course"); };
   const stats = computeStats(progressMap);
 
-  // upsell config for dashboard (current module or tweak override)
+  const logout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.refresh(); // re-run the server gate → unauthenticated → login
+  };
+
+  // upsell config for dashboard (current module or tweak override) — still fixtures
   const curMod = moduleOf(currentLessonId) || F.modules[0];
   const upsellKey = String(t.upsellIntensity) !== "auto" ? String(t.upsellIntensity) : null;
   const dashUpsell: UpsellConfig | undefined = upsellKey
@@ -91,47 +114,47 @@ export default function AppRoot({ dev }: { dev: boolean }) {
     );
   }
 
-  // ---- Login is standalone (no shell) ----
-  if (screen === "login") {
+  // ---- Not authenticated → login only (real magic-link auth) ----
+  if (!authed) {
     return (
-      <>
-        <LoginScreen dev={dev} onLogin={() => setScreen("dashboard")} />
+      <CurrentUserProvider value={initialUser ?? null}>
+        <LoginScreen dev={dev} />
         {tweaksPanel()}
-      </>
+      </CurrentUserProvider>
     );
   }
 
   // ---- Shell config per screen ----
   const shellProps: ShellProps = {
-    dashboard: { active: "dashboard", title: "Welcome back, " + F.user.name.split(" ")[0], subtitle: "Pick up where you left off — " + stats.completed + " of " + stats.total + " lessons done." },
+    dashboard: { active: "dashboard", title: "Welcome back, " + displayName.split(" ")[0], subtitle: "Pick up where you left off — " + stats.completed + " of " + stats.total + " lessons done." },
     courses: { active: "courses", title: "My Courses", subtitle: "Your enrolled programs." },
     resources: { active: "resources", title: "Resources", subtitle: null },
     settings: { active: "settings", title: "Settings", subtitle: null },
     course: { active: "courses", title: F.courses[0].title, onBack: () => setScreen("courses"), backLabel: "My Courses" },
-  }[screen];
+  }[screen as Exclude<Screen, "login">];
 
   return (
-    <>
-      <AppShell {...shellProps} onNav={(id) => setScreen(id as Screen)} onLogout={() => setScreen("login")}>
+    <CurrentUserProvider value={initialUser ?? null}>
+      <AppShell {...shellProps} onNav={(id) => setScreen(id as Screen)} onLogout={logout}>
         {screen === "dashboard" && (
           <Dashboard progressMap={progressMap} currentLessonId={currentLessonId}
             onResume={() => setScreen("course")} onOpenLesson={openLesson}
             onOpenCourse={() => setScreen("course")} upsellConfig={dashUpsell} />
         )}
         {screen === "courses" && (
-          <MyCourses progressMap={progressMap} emptyState={t.emptyCourses}
+          <MyCourses enrolledCourses={enrolledCourses} emptyStateOverride={t.emptyCourses}
             onOpenCourse={() => setScreen("course")} />
         )}
         {screen === "resources" && <ResourcesScreen onOpenLesson={openLesson} />}
-        {screen === "settings" && <SettingsScreen onLogout={() => setScreen("login")} />}
+        {screen === "settings" && <SettingsScreen onLogout={logout} />}
         {screen === "course" && (
           <CourseView progressMap={progressMap} setLessonPct={setLessonPct}
             currentLessonId={currentLessonId} setCurrentLessonId={setCurrentLessonId}
-            onLogout={() => setScreen("login")} upsellOverride={String(t.upsellIntensity)}
+            onLogout={logout} upsellOverride={String(t.upsellIntensity)}
             adSignal={adSignal} simSeconds={t.simSeconds} dev={dev} />
         )}
       </AppShell>
       {tweaksPanel()}
-    </>
+    </CurrentUserProvider>
   );
 }

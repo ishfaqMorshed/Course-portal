@@ -4,11 +4,9 @@
 // future phases without a MASTER.md update.
 
 import { useState, type ReactNode } from "react";
-import { FIXTURES } from "@/lib/fixtures";
+import { useCurrentUser } from "@/lib/current-user";
 import { BtnSecondary } from "@/components/ui/Buttons";
 import { IconBell, IconCreditCard, IconLogOut, IconUser } from "@/components/icons";
-
-const FX = FIXTURES;
 
 function Toggle({ on, set }: { on: boolean; set: (v: boolean) => void }) {
   return (
@@ -30,15 +28,16 @@ function Card({ icon, title, children }: { icon: ReactNode; title: string; child
 export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
   const [emails, setEmails] = useState(true);
   const [reminders, setReminders] = useState(false);
+  const user = useCurrentUser();
 
   return (
     <div className="px-6 lg:px-9 py-7 flex flex-col gap-5 max-w-[720px]">
       <Card icon={<IconUser size={18} />} title="Profile">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-promo text-primary font-bold flex items-center justify-center">{FX.user.initials}</div>
+          <div className="w-14 h-14 rounded-full bg-promo text-primary font-bold flex items-center justify-center">{user.initials}</div>
           <div>
-            <div className="text-[15px] font-semibold text-textPrimary">{FX.user.name}</div>
-            <div className="text-sm text-textSecondary">{FX.user.email}</div>
+            <div className="text-[15px] font-semibold text-textPrimary">{user.name}</div>
+            <div className="text-sm text-textSecondary">{user.email}</div>
           </div>
           <BtnSecondary className="ml-auto">Edit profile</BtnSecondary>
         </div>
