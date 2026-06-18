@@ -20,8 +20,9 @@ Rule: GHL credentials never reach the browser. All GHL calls go through Edge Fun
 
 | Frontend (Phase 1 component) | Replace fixture with | Backend source |
 |---|---|---|
-| S1 Login + "Resend access link" | `supabase.auth.signInWithOtp({email})` — resend = same call, 30s client-side cooldown | Supabase Auth (magic link) |
-| S1b Setup landing | token exchange on `/auth/callback` | Supabase Auth |
+| S1 Login | `supabase.auth.signInWithPassword({email,password})` (primary); "email me a login link instead" = `signInWithOtp({email})` forgot-password fallback, 30s client-side cooldown | Supabase Auth (email+password, magic-link fallback) — Phase 2.5 |
+| S1c Setup (`/setup?token=…`) | `verifyOtp({type:'recovery',token_hash})` → `updateUser({password})` → dashboard; token verified on submit (one-time) | Supabase Auth — Phase 2.5 |
+| S1b Setup landing (magic-link fallback) | token exchange on `/auth/callback` (`exchangeCodeForSession` / `verifyOtp`) | Supabase Auth |
 | S0 Shell sidebar promo card | `get_upsell(course_id, placement='sidebar_promo')` | upsell_config |
 | S2a Dashboard hero (Continue Learning) | `get_resume_target(user)` — most recent lesson_progress with completed_at NULL, else next uncompleted | lesson_progress + lessons |
 | S2a Stats row | `get_dashboard_stats(user, course_id)` — lessons done n/m, pct, watch time = SUM(seconds_watched) | lesson_progress view |

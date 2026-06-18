@@ -2,8 +2,9 @@
 // wh-purchase-47 — inbound GHL $47-purchase webhook (MASTER §5, CONNECTION-MAP §5).
 //
 // Does: verify shared secret → confirm $47 product → idempotency check
-//   → create/find auth user → upsert profile → enroll → segment=never_activated
-//   → generate magic setup link → write it to GHL custom field portal_setup_url
+//   → create/find auth user (no password) → upsert profile → enroll → segment=never_activated
+//   → generate a one-time recovery token → write PORTAL_BASE_URL/setup?token=…&email=…
+//     to GHL custom field portal_setup_url (buyer sets a password there; Phase 2.5)
 //   → log to ghl_sync_log. Duplicate (same payment.transaction_id) → 200 no-op.
 //
 // OUT OF SCOPE this phase: GHL segment tag add (sync-segment-tag), events, ads.
@@ -84,17 +85,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw created.error;
     }
 
-    // 6. Generate the magic setup link (also yields the user id for new & existing).
+    // 6. Generate a one-time recovery token and build our own /setup URL (Phase 2.5).
+    //    We use the hashed_token (NOT the Supabase action_link) so the buyer lands
+    //    on /setup to attach a password, instead of being auto-logged-in.
+    //    The token is single-use: claimed at /setup via verifyOtp(type=recovery).
     const portalBase = Deno.env.get("PORTAL_BASE_URL")!;
-    const link = await admin.generateLink({
-      type: "magiclink",
-      email,
-      options: { redirectTo: `${portalBase}/auth/callback` },
-    });
+    const link = await admin.generateLink({ type: "recovery", email });
     if (link.error) throw link.error;
     const userId = link.data.user?.id;
-    const setupUrl = link.data.properties?.action_link;
-    if (!userId || !setupUrl) throw new Error("generateLink returned no user/action_link");
+    const hashedToken = link.data.properties?.hashed_token;
+    if (!userId || !hashedToken) throw new Error("generateLink returned no user/hashed_token");
+    // email is a cosmetic, read-only prefill on /setup — the token is the security boundary.
+    const setupUrl = `${portalBase}/setup?token=${hashedToken}&email=${encodeURIComponent(email)}`;
 
     // 7. Resolve the target course.
     const { data: course, error: courseErr } = await db

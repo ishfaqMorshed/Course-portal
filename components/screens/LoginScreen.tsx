@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import { IconMail, IconZap } from "@/components/icons";
 
-// dev-only bar (gated by ?dev=1). Phase 2: real auth means we can't fabricate a
+// dev-only bar (gated by ?dev=1). Phase 2.5: real auth means we can't fabricate a
 // session, so this is just a convenience prefill of the test buyer's email.
 function LoginDevBar({ onFillEmail }: { onFillEmail: () => void }) {
   return (
@@ -12,36 +13,68 @@ function LoginDevBar({ onFillEmail }: { onFillEmail: () => void }) {
       <div className="flex items-center justify-center gap-2 px-4 py-2 flex-wrap">
         <span>dev:</span>
         <button onClick={onFillEmail} className="text-white/80 underline underline-offset-2 hover:text-white">prefill test email</button>
-        <span>· enrolled email → magic link · unknown email → not-enrolled error</span>
+        <span>· email + password → dashboard · forgot password → magic link</span>
       </div>
     </div>
   );
 }
 
-// S1 — Login / Access (only screen WITHOUT shell). Real Supabase magic-link OTP.
+// S1 — Login / Access (only screen WITHOUT shell). Phase 2.5: email + password
+// (signInWithPassword) is primary; "email me a link instead" is the magic-link
+// (signInWithOtp) forgot-password fallback.
 export default function LoginScreen({ dev }: { dev: boolean }) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [state, setState] = useState<"default" | "sending" | "sent" | "error">("default");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [status, setStatus] = useState<"idle" | "submitting" | "sending" | "sent" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [resendIn, setResendIn] = useState(30);
 
   useEffect(() => {
-    if (state !== "sent") return;
+    if (status !== "sent") return;
     setResendIn(30);
     const iv = setInterval(() => setResendIn((n) => (n > 0 ? n - 1 : 0)), 1000);
     return () => clearInterval(iv);
-  }, [state]);
+  }, [status]);
 
-  // Magic-link send. shouldCreateUser:false → only enrolled (pre-created) users
-  // get a link; everyone else surfaces the "not enrolled" error (CONNECTION-MAP §1).
-  const send = async () => {
-    const e = email.trim().toLowerCase();
+  const normalisedEmail = () => email.trim().toLowerCase();
+
+  // Primary path — email + password.
+  const login = async () => {
+    const e = normalisedEmail();
     if (!e || !e.includes("@")) {
-      setState("error");
+      setStatus("error");
       setErrorMsg("That doesn't look like an email address.");
       return;
     }
-    setState("sending");
+    if (!password) {
+      setStatus("error");
+      setErrorMsg("Enter your password.");
+      return;
+    }
+    setStatus("submitting");
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email: e, password });
+    if (error) {
+      setStatus("error");
+      setErrorMsg("Email or password is incorrect.");
+      return;
+    }
+    router.push("/");
+    router.refresh(); // re-run the server gate → authenticated → dashboard
+  };
+
+  // Fallback path — magic link. shouldCreateUser:false → only enrolled (pre-created)
+  // users get a link; everyone else surfaces "Email is not registered."
+  const sendLink = async () => {
+    const e = normalisedEmail();
+    if (!e || !e.includes("@")) {
+      setStatus("error");
+      setErrorMsg("Enter the email you enrolled with first.");
+      return;
+    }
+    setStatus("sending");
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email: e,
@@ -51,11 +84,11 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
       },
     });
     if (error) {
-      setState("error");
-      setErrorMsg("We couldn't find an enrollment for that email. Check the address you bought with.");
+      setStatus("error");
+      setErrorMsg("Email is not registered.");
       return;
     }
-    setState("sent");
+    setStatus("sent");
   };
 
   return (
@@ -99,7 +132,7 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
 
         <div className="flex-1 flex items-center">
           <div className="w-full max-w-[380px] mx-auto px-6">
-            {state === "sent" ? (
+            {status === "sent" ? (
               <div className="flex flex-col items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center"><IconMail size={20} /></div>
                 <div>
@@ -111,42 +144,55 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
                   {resendIn > 0 ? (
                     <span>Resend in {resendIn}s</span>
                   ) : (
-                    <button onClick={send} className="font-semibold text-primary hover:text-primaryHover transition-colors duration-150">Resend link</button>
+                    <button onClick={sendLink} className="font-semibold text-primary hover:text-primaryHover transition-colors duration-150">Resend link</button>
                   )}
                 </div>
-                <button onClick={() => { setState("default"); setEmail(""); }} className="text-[13px] font-semibold text-primary hover:text-primaryHover transition-colors duration-150">Use a different email</button>
+                <button onClick={() => { setStatus("idle"); setEmail(""); setPassword(""); }} className="text-[13px] font-semibold text-primary hover:text-primaryHover transition-colors duration-150">Back to login</button>
               </div>
             ) : (
               <div>
                 <h1 className="text-2xl font-bold text-textPrimary leading-8">Welcome back</h1>
-                <p className="text-sm text-textSecondary leading-[22px] mt-2">Enter the email you enrolled with — we&apos;ll send you a one-time login link.</p>
+                <p className="text-sm text-textSecondary leading-[22px] mt-2">Log in with the email and password you set up.</p>
 
                 <div className="mt-7">
                   <label htmlFor="login-email" className="block text-[13px] font-semibold text-textPrimary mb-1.5">Email address</label>
                   <input id="login-email" type="email" value={email}
-                    onChange={(e) => { setEmail(e.target.value); if (state === "error") setState("default"); }}
-                    onKeyDown={(e) => e.key === "Enter" && send()}
+                    onChange={(e) => { setEmail(e.target.value); if (status === "error") setStatus("idle"); }}
                     placeholder="you@email.com"
-                    className={"w-full bg-subtle rounded-[10px] px-4 py-3 text-sm text-textPrimary placeholder-textSecondary outline-none focus:ring-[1.5px] focus:ring-primary " + (state === "error" ? "ring-[1.5px] ring-danger" : "")} />
-                  {state === "error" && <p className="text-[13px] text-danger leading-[18px] mt-2">{errorMsg}</p>}
+                    className={"w-full bg-subtle rounded-[10px] px-4 py-3 text-sm text-textPrimary placeholder-textSecondary outline-none focus:ring-[1.5px] focus:ring-primary " + (status === "error" ? "ring-[1.5px] ring-danger" : "")} />
                 </div>
 
-                <button onClick={send} disabled={state === "sending"}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="login-password" className="block text-[13px] font-semibold text-textPrimary">Password</label>
+                    <button type="button" onClick={() => setShow((s) => !s)} className="text-[12px] font-semibold text-primary hover:text-primaryHover transition-colors duration-150">{show ? "Hide" : "Show"}</button>
+                  </div>
+                  <input id="login-password" type={show ? "text" : "password"} value={password}
+                    onChange={(e) => { setPassword(e.target.value); if (status === "error") setStatus("idle"); }}
+                    onKeyDown={(e) => e.key === "Enter" && login()}
+                    placeholder="Your password"
+                    className={"w-full bg-subtle rounded-[10px] px-4 py-3 text-sm text-textPrimary placeholder-textSecondary outline-none focus:ring-[1.5px] focus:ring-primary " + (status === "error" ? "ring-[1.5px] ring-danger" : "")} />
+                  {status === "error" && <p className="text-[13px] text-danger leading-[18px] mt-2">{errorMsg}</p>}
+                </div>
+
+                <button onClick={login} disabled={status === "submitting"}
                   className="w-full mt-4 bg-primary hover:bg-primaryHover disabled:hover:bg-primary transition-colors duration-150 text-white text-sm font-semibold rounded-[10px] px-5 py-3 disabled:opacity-70 flex items-center justify-center gap-2">
-                  {state === "sending" ? (
+                  {status === "submitting" ? (
                     <>
-                      <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin"></span><span>Sending link…</span>
+                      <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin"></span><span>Logging in…</span>
                     </>
                   ) : (
-                    <span>Email me a login link</span>
+                    <span>Log in</span>
                   )}
                 </button>
 
                 <div className="border-t border-line mt-7"></div>
 
                 <div className="flex items-center gap-1.5 flex-wrap text-[13px] text-textSecondary mt-5">
-                  <span>Bought the course but no email?</span>
-                  <button onClick={send} className="font-semibold text-primary hover:text-primaryHover transition-colors duration-150">Resend access link</button>
+                  <span>Forgot your password?</span>
+                  <button onClick={sendLink} disabled={status === "sending"} className="font-semibold text-primary hover:text-primaryHover transition-colors duration-150 disabled:opacity-70">
+                    {status === "sending" ? "Sending…" : "Email me a login link instead"}
+                  </button>
                 </div>
               </div>
             )}
@@ -158,7 +204,7 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
         </div>
       </div>
 
-      {dev && <LoginDevBar onFillEmail={() => { setEmail("nakibworkspace@gmail.com"); setState("default"); }} />}
+      {dev && <LoginDevBar onFillEmail={() => { setEmail("nakibworkspace@gmail.com"); setStatus("idle"); }} />}
     </div>
   );
 }

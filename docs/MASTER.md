@@ -20,7 +20,7 @@ Out of scope: $497 checkout page (GHL), $497→$1997 upsell (human call), all em
 | D2 | In-video pop ad | **Rule-based** engine (rules in `ad_rules` config, e.g. "midpoint of every lesson video", skippable after N seconds) |
 | D3 | Per-lesson GHL event | **Every** lesson completion fires an outbound event to a GHL webhook/workflow (generic trigger→action config, not hardcoded) |
 | D4 | v1 scope | **Single-course extensible** — UI shows one course; schema is multi-course from day one |
-| D5 | Stack | **Supabase**: Auth (magic link), Postgres, `pg_cron` + `pg_net` for daily segment job, Edge Functions for GHL API |
+| D5 | Stack | **Supabase**: Auth (email+password primary, magic-link fallback — Phase 2.5, see §8 TC1), Postgres, `pg_cron` + `pg_net` for daily segment job, Edge Functions for GHL API |
 | D6 | Toolchain | Claude Design (frontend) → Cursor + Claude Code (implementation) → Vercel (deploy) |
 | D7 | Video | Vimeo embeds via official Player API (`player.js`). No Video.js |
 | D8 | Source of truth for behavior | Append-only `events` table; segments and GHL pushes are derived from it |
@@ -62,7 +62,7 @@ Rules: exactly **one** segment tag per contact at all times. On transition: add 
 ## 5. GHL integration contract
 
 **Inbound (GHL → portal, Supabase Edge Functions):**
-- `POST /webhooks/purchase-47` → create user + enrollment, set segment never_activated, return/store magic setup URL → GHL sends welcome email with it
+- `POST /webhooks/purchase-47` → create user + enrollment, set segment never_activated, generate a one-time **recovery token** and store `PORTAL_BASE_URL/setup?token=…&email=…` as the setup URL → GHL sends welcome email with it. The buyer lands on `/setup` to attach a password (Phase 2.5, §8 TC1) — no auto-login link.
 - `POST /webhooks/purchase-497` → set segment dfy_purchased
 
 **Outbound (portal → GHL, API v2 with PIT token):**
@@ -86,6 +86,11 @@ Input: `DESIGN-BRIEF.md`. Build all screens/states with fixture data, zero backe
 Supabase project, full schema + RLS, magic-link auth, purchase-47 webhook → user + enrollment + setup URL.
 **EXIT:** GHL test purchase → account exists → welcome email link logs you in → My Courses shows the course.
 
+### PHASE 2.5 — Password setup + email/password login (Cursor)
+Spec: `docs/PHASE-2.5-SPEC.md` (implements §8 TC1). Replace the auto-login magic link with: welcome link → `/setup?token=…` (one-time **recovery** token) → buyer sets a password → dashboard. Returning users log in with email+password (`signInWithPassword`); magic link (`signInWithOtp`) kept only as the forgot-password fallback. New buyers only — existing test accounts wiped, no migration. **No schema change** — the recovery-token approach (token verified only on submit, so no session exists until a password is set) makes the `profiles.password_set` column from TC1 unnecessary.
+Touches: `wh-purchase-47` (recovery token + `/setup` URL), new `/setup` route + screen, `LoginScreen` (password field + `signInWithPassword`), `supabase/config.toml` (email+password, `minimum_password_length`, `otp_expiry`, `enable_signup=false`) + matching hosted-dashboard Auth toggles. Out of scope: events, ads, upsell, segments, $497.
+**EXIT:** run `docs/PHASE-2.5-SPEC.md` EXIT steps (welcome link → /setup → set password → dashboard; logout → email+password login; tampered token / wrong email → "Email is not registered."; forgot-password magic link; claimed token reuse rejected).
+
 ### PHASE 3 — Player + tracking engine (Cursor)
 Vimeo Player API wiring (resume, timeupdate checkpoints every 10s, 90% → lesson_completed), event writes, per-lesson GHL push (D3), rule-based ad engine (pause → overlay → log ad_view/ad_skip/ad_click → resume).
 **EXIT:** watch test lesson to 90% → event row + lesson_progress.completed_at set + GHL contact shows the event. Ad fires per rule, skip + click logged.
@@ -108,3 +113,21 @@ Idempotency, retries, refund stub (access revocation flag), Vercel deploy, custo
 2. No phase starts until the previous phase's EXIT test passes — verified by you, not the agent.
 3. Schema changes after Phase 2 require updating Section 3 here first.
 4. Frontend from Phase 1 is wired progressively, never rebuilt.
+
+## 8. Tracked changes / later phases
+
+Approved direction changes captured here so they are not lost. **None of these are implemented yet** — they are built only when their phase is scheduled. Do not act on this section during the current phase.
+
+### TC1 — Email + password login for returning users  ✅ IMPLEMENTED in Phase 2.5
+> Built per `docs/PHASE-2.5-SPEC.md`. The "implied changes" below are the original capture; two diverged in the build and are noted inline: the setup URL carries a **one-time recovery token to `/setup`** (not an auto-login link), and the **`profiles.password_set` column was NOT added** (the recovery token is verified only on submit, so no session exists until a password is set — the gate stays purely session-based).
+
+**Decision:** Returning-user login supports **email + password** as the primary method. The password is set by the user during **first-time setup** (the `/setup?token=…` link from the welcome email). **Magic link is kept as a fallback** (forgot-password / passwordless sign-in).
+**Reason:** A paid course means frequent logins. Requiring the email round-trip on every login is poor UX; an email-hop on *every* sign-in is unacceptable for a returning paying customer. First-time entry stays passwordless (no credential to type before the account is theirs).
+**Supersedes:** D5 "Auth (magic link)" — to become "Auth (email+password, magic-link fallback)" when implemented.
+
+Implied changes — **list only, do not implement now:**
+- **Auth config (Supabase):** enable the Email provider's **password** sign-in (currently magic-link / OTP only). Keep magic-link / OTP enabled for the fallback path. Configure password policy (min length) and the password-reset email template.
+- **First-time setup flow:** ✅ new `/setup` route + screen — validates a one-time recovery token on submit (`verifyOtp({type:'recovery'})`), then `auth.updateUser({ password })`, then redirects to the dashboard. (Diverged from "auto-login then set password": no session is created until the password is submitted.)
+- **Login screen (frontend):** ✅ email + password primary (`signInWithPassword`); magic-link demoted to an "email me a login link instead" forgot-password action. Wire only — brand panel structure unchanged.
+- **Schema (Section 3):** ⛔ NOT done — deliberately skipped. The `profiles.password_set` column proved unnecessary because the recovery token is verified only on submit, so an authenticated session never exists without a password. Section 3 unchanged (no Working-Rule-3 schema change).
+- **Webhook (purchase-47):** ✅ account creation/enrollment/segment unchanged; it now issues a recovery token and stores `PORTAL_BASE_URL/setup?token=…&email=…` as `portal_setup_url` (was an auto-login magiclink).

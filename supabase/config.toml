@@ -19,12 +19,19 @@ enabled = true
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["http://localhost:3000/auth/callback"]
 jwt_expiry = 3600
-enable_signup = true
-# Magic-link email OTP
+# New buyers only — accounts are created by wh-purchase-47 via the admin API
+# (which bypasses this); public self-signup is off (Phase 2.5).
+enable_signup = false
+# Minimum length for email+password auth (Phase 2.5).
+minimum_password_length = 8
+# Email + password (primary) with magic-link / OTP kept as the forgot-password fallback.
 [auth.email]
-enable_signup = true
+enable_signup = false
 double_confirm_changes = true
 enable_confirmations = true
+# Recovery/OTP token lifetime — the welcome-email /setup token must outlive a short
+# session, so give the buyer 24h (max). Beyond that, "forgot password" re-issues a link.
+otp_expiry = 86400
 
 [functions.wh-purchase-47]
 # Inbound GHL webhook — verifies a shared secret header itself, so no Supabase JWT required.
