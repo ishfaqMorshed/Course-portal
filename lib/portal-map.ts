@@ -19,6 +19,8 @@ export function mapUpsell(row: UpsellRow): UpsellConfig {
     socialProof: null,
     urgency: null,
     imageUrl: row.image_url ?? null,
+    id: row.id,
+    moduleId: row.module_id,
   };
 }
 
@@ -35,7 +37,7 @@ export function resolveCompletionUpsell(upsells: UpsellRow[]): UpsellConfig | un
 }
 
 // Global sidebar promo (placement='sidebar_promo', module_id null) → SidebarPromo.
-export function resolveSidebarPromo(upsells: UpsellRow[]): SidebarPromo | null {
+export function resolveSidebarPromo(upsells: UpsellRow[], courseId: string | null = null): SidebarPromo | null {
   const row = upsells.find((u) => u.placement === "sidebar_promo");
   if (!row) return null;
   return {
@@ -45,6 +47,8 @@ export function resolveSidebarPromo(upsells: UpsellRow[]): SidebarPromo | null {
     url: row.cta_url,
     imageUrl: row.image_url ?? null,
     illustrationLabel: "promo art",
+    id: row.id,
+    courseId,
   };
 }
 

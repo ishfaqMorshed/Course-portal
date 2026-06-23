@@ -1,15 +1,39 @@
 "use client";
 
+import { useEffect } from "react";
 import { BtnPrimary, BtnSecondary } from "@/components/ui/Buttons";
 import { IconArrowRight, IconClock, IconExternalLink, IconZap } from "@/components/icons";
+import { track, trackUpsellViewOnce } from "@/lib/track";
 import type { UpsellConfig } from "@/lib/types";
 
 // Right-rail upsell panel — 3 intensity tiers (DESIGN-SYSTEM §5).
-export default function UpsellPanel({ config }: { config?: UpsellConfig }) {
+// Self-tracks engagement (Phase 5): upsell_view once per panel-shown per session
+// (rail + completion placements both flow through here) and upsell_click on CTA.
+export default function UpsellPanel({ config, courseId = null }: { config?: UpsellConfig; courseId?: string | null }) {
+  // upsell_view — fire once when the panel renders for a new module/placement.
+  // Keyed by placement:id so each rail module + the completion panel fire once.
+  const viewKey = config?.id ? `${config.placement}:${config.id}` : null;
+  useEffect(() => {
+    if (!config || !viewKey) return;
+    void trackUpsellViewOnce(
+      viewKey,
+      { placement: config.placement, intensity: config.intensity, upsell_id: config.id, module_id: config.moduleId ?? null },
+      courseId,
+    );
+  }, [viewKey, courseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!config) return null;
   const tier = config.intensity >= 5 ? 3 : config.intensity >= 3 ? 2 : 1;
   const shells: Record<number, string> = { 1: "bg-subtle", 2: "bg-promo", 3: "bg-primary text-white" };
-  const open = () => window.open(config.url, "_blank");
+  // upsell_click — strongest buying signal; log placement + which upsell, then open.
+  const open = () => {
+    void track(
+      "upsell_click",
+      { placement: config.placement, intensity: config.intensity, upsell_id: config.id, module_id: config.moduleId ?? null },
+      courseId,
+    );
+    window.open(config.url, "_blank");
+  };
   return (
     <div data-comment-anchor="upsell-panel" className={"rounded-2xl p-6 transition-colors " + shells[tier]}>
       {config.imageUrl && (

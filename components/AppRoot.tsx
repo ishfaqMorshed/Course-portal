@@ -79,7 +79,7 @@ export default function AppRoot({
   const [adSignal, setAdSignal] = useState(0);
 
   const displayName = initialUser?.name ?? "Learner";
-  const sidebarPromo = resolveSidebarPromo(upsells);
+  const sidebarPromo = resolveSidebarPromo(upsells, course?.id ?? null);
 
   // Live watched-pct update — monotonic (never regress on a backward scrub) and
   // a no-op when the rounded value is unchanged (avoids redundant re-renders).

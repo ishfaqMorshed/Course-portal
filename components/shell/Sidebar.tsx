@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Placeholder from "@/components/ui/Placeholder";
 import { IconSettings, IconZap, NavIcon } from "@/components/icons";
+import { track, trackUpsellViewOnce } from "@/lib/track";
 import type { SidebarPromo } from "@/lib/types";
 
 const NAV = [
@@ -24,6 +26,28 @@ function Logo() {
 // S0 sidebar body: logo · nav · lavender promo card · bottom-anchored Settings.
 // promo is the live sidebar_promo upsell (Phase 2.7-fix); null → card hidden.
 export default function Sidebar({ active, onNav, promo }: { active: string; onNav: (id: string) => void; promo?: SidebarPromo | null }) {
+  // upsell_view for the sidebar_promo placement — once per session (the dedup Set
+  // in track.ts swallows the duplicate from the mobile-drawer Sidebar instance).
+  const promoViewKey = promo?.id ? `sidebar_promo:${promo.id}` : null;
+  useEffect(() => {
+    if (!promo || !promoViewKey) return;
+    void trackUpsellViewOnce(
+      promoViewKey,
+      { placement: "sidebar_promo", upsell_id: promo.id, module_id: null },
+      promo.courseId ?? null,
+    );
+  }, [promoViewKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // upsell_click for the sidebar promo CTA — log which upsell, then open.
+  const openPromo = () => {
+    if (!promo) return;
+    void track(
+      "upsell_click",
+      { placement: "sidebar_promo", upsell_id: promo.id, module_id: null },
+      promo.courseId ?? null,
+    );
+    window.open(promo.url, "_blank");
+  };
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 pt-7 pb-8">
@@ -56,7 +80,7 @@ export default function Sidebar({ active, onNav, promo }: { active: string; onNa
               <div className="font-bold">{promo.line1}</div>
               {promo.line2 && <div className="font-medium mt-0.5">{promo.line2}</div>}
             </div>
-            <button onClick={() => window.open(promo.url, "_blank")}
+            <button onClick={openPromo}
               className="w-full bg-white border-[1.5px] border-primary text-primary text-xs font-semibold rounded-[10px] py-2 hover:bg-white/70 transition-colors">
               {promo.cta}
             </button>

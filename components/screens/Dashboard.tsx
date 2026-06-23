@@ -105,7 +105,7 @@ export default function Dashboard({
           <ModuleProgressRail modules={modules} progressMap={progressMap} completedSet={completedSet}
             currentModuleId={currentMod?.id ?? ""} pctTotal={stats.pct}
             onSelectModule={(m) => m.lessons[0] && onOpenLesson(m.lessons[0].id)} />
-          <UpsellPanel config={upsellConfig} />
+          <UpsellPanel config={upsellConfig} courseId={course?.id ?? null} />
         </aside>
       </div>
     </div>

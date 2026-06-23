@@ -320,7 +320,7 @@ export default function CourseView({
             </main>
 
             <aside className="w-full xl:w-[300px] shrink-0">
-              <div className="xl:sticky xl:top-2"><UpsellPanel config={upsellConfig} /></div>
+              <div className="xl:sticky xl:top-2"><UpsellPanel config={upsellConfig} courseId={courseId} /></div>
             </aside>
           </div>
         </div>

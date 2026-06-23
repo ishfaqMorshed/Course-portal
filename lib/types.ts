@@ -79,6 +79,10 @@ export interface UpsellConfig {
   socialProof: string | null;
   urgency: string | null;
   imageUrl?: string | null; // -> image_url (0007)
+
+  // ---- identity for upsell_view/upsell_click payloads (Phase 5) ----
+  id?: string; // -> upsell_config.id
+  moduleId?: string | null; // -> upsell_config.module_id (null = global)
 }
 
 // ad_rules(id, course_id, scope, trigger_type, trigger_value, skippable_after_s, asset_url, cta_url, active)
@@ -109,6 +113,10 @@ export interface SidebarPromo {
   cta: string;
   url: string;
   imageUrl?: string | null; // -> upsell_config.image_url (0007)
+
+  // ---- identity for upsell_view/upsell_click payloads (Phase 5) ----
+  id?: string; // -> upsell_config.id
+  courseId?: string | null; // -> upsell_config.course_id (events column)
 
   // ---- runtime-only, not a DB column ----
   illustrationLabel: string; // runtime-only, not a DB column (placeholder art label)
