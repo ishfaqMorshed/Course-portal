@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { IconZap, NavIcon } from "@/components/icons";
 
 const LINKS = [
+  { href: "/admin/analytics", label: "Analytics", icon: "grid" },
+  { href: "/admin/students", label: "Students", icon: "book" },
   { href: "/admin/courses", label: "Courses", icon: "book" },
   { href: "/admin/upsells", label: "Upsells", icon: "grid" },
   { href: "/admin/ad-rules", label: "Ad Rules", icon: "folder" },
