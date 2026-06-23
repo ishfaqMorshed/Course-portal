@@ -36,3 +36,11 @@ otp_expiry = 86400
 [functions.wh-purchase-47]
 # Inbound GHL webhook — verifies a shared secret header itself, so no Supabase JWT required.
 verify_jwt = false
+
+[functions.wh-purchase-497]
+# Inbound GHL $497 webhook — shared-secret header, no Supabase JWT (Phase 4).
+verify_jwt = false
+
+[functions.sync-segment-tag]
+# Called by the user_segments pg_net trigger — shared-secret header, no Supabase JWT (Phase 4).
+verify_jwt = false

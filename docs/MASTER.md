@@ -8,6 +8,8 @@ Companion files: `DESIGN-BRIEF.md` (Claude Design input) · `CONNECTION-MAP.md` 
 
 A web portal where buyers of the **$47 course** watch content. Its one revenue job: convert $47 buyers into **$497 DFY buyers** via (a) a per-module upsell panel, (b) rule-based in-video upsell ads, and (c) behavioral tracking that keeps exactly one segment tag per contact synced to GoHighLevel (GHL), which runs all email sequences.
 
+> **Status update (2026-06) — $47-only:** We currently sell **only the $47 course**. The **$497 DFY offer is not a live GHL product** — DFY/service sales happen **off-platform / manually**. The segment engine's active purpose is therefore **behavioral tracking of $47 buyers** so we can target them (via GHL email sequences + manual outreach) to sell our services. The `dfy_purchased` segment and the `wh-purchase-497` webhook remain built and in place but are **dormant/unused** — nothing fires them today. Leave them as-is; reactivate if a $497 product is ever wired into GHL. (This note supersedes the "$497 buyers" framing above and the §4/§5 `dfy_purchased`/purchase-497 entries.)
+
 Built as a **reusable platform**: single course in v1, but every table carries `course_id` and all course-specific content (modules, lessons, upsell copy, ad rules, segment thresholds) is data/config, never code.
 
 Out of scope: $497 checkout page (GHL), $497→$1997 upsell (human call), all email content (GHL), admin panel (later phase), analytics dashboard (later phase).
@@ -63,7 +65,7 @@ Read RPCs: `get_enrolled_courses()` (Phase 2), `get_course_tree(course_id)` (Pha
 | active | Has progress within recency window, not complete | `seg_active` |
 | stalled | Started, silent > stalled_after_days, not complete | `seg_stalled` |
 | completer | `course_completed` event exists | `seg_completer` |
-| dfy_purchased | $497 purchase webhook received | `seg_dfy_purchased` (terminal; suppress all) |
+| dfy_purchased | $497 purchase webhook received | `seg_dfy_purchased` (terminal; suppress all) — **DORMANT (§1 status): no live $497 product; never set today** |
 
 Rules: exactly **one** segment tag per contact at all times. On transition: add new tag, remove old tag, log to `ghl_sync_log`. Time-based transitions (never_activated, stalled) computed by the **daily pg_cron job**; everything else is event-driven in real time.
 
@@ -71,7 +73,7 @@ Rules: exactly **one** segment tag per contact at all times. On transition: add 
 
 **Inbound (GHL → portal, Supabase Edge Functions):**
 - `POST /webhooks/purchase-47` → create user + enrollment, set segment never_activated, generate a one-time **recovery token** and store `PORTAL_BASE_URL/setup?token=…&email=…` as the setup URL → GHL sends welcome email with it. The buyer lands on `/setup` to attach a password (Phase 2.5, §8 TC1) — no auto-login link.
-- `POST /webhooks/purchase-497` → set segment dfy_purchased
+- `POST /webhooks/purchase-497` → set segment dfy_purchased — **DORMANT (§1 status): built but unused; no live $497 GHL product points at it**
 
 **Outbound (portal → GHL, API v2 with PIT token):**
 - Tag add/remove on every segment transition
@@ -113,6 +115,7 @@ Follow-up to 2.7 (admin edits weren't appearing in the portal). Three things, al
 
 ### PHASE 4 — Segment engine (Cursor)
 Event-driven transitions + daily pg_cron job for time-based segments + tag swap edge function + dfy suppression.
+Purpose (§1 status): **behavioral tracking of $47 buyers** to target them for our services (GHL sequences + manual outreach). The `dfy_purchased`/`wh-purchase-497` pieces are built but **dormant** — exercise the 5 live segments; `dfy_purchased` is verifiable but not in active use.
 **EXIT:** simulate all 6 journeys (manipulate timestamps in DB) → correct single tag in GHL each time; ghl_sync_log clean.
 
 ### PHASE 5 — Upsell panel (Cursor)
