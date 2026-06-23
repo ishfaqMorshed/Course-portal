@@ -5,6 +5,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useCurrentUser } from "@/lib/current-user";
+import { BRAND_NAME } from "@/lib/brand";
 import { BtnSecondary } from "@/components/ui/Buttons";
 import { IconBell, IconCreditCard, IconLogOut, IconUser } from "@/components/icons";
 
@@ -55,7 +56,7 @@ export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
       </Card>
       <Card icon={<IconCreditCard size={18} />} title="Billing">
         <div className="flex items-center justify-between">
-          <div><div className="text-sm font-medium text-textPrimary">AI Profit Systems</div><div className="text-xs text-textSecondary">Lifetime access · purchased Mar 2026</div></div>
+          <div><div className="text-sm font-medium text-textPrimary">{BRAND_NAME}</div><div className="text-xs text-textSecondary">Lifetime access · purchased Mar 2026</div></div>
           <span className="text-xs font-semibold text-success bg-success/10 rounded-full px-3 py-1.5">Active</span>
         </div>
       </Card>

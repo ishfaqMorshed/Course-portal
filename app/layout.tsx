@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { BRAND_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
@@ -10,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Course Portal — AI Profit Systems",
+  title: `Course Portal — ${BRAND_NAME}`,
   description: "Watch the course. Skip the guesswork.",
 };
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { BRAND_NAME } from "@/lib/brand";
 import { track } from "@/lib/track";
 import { useRouter } from "next/navigation";
 import { IconMail, IconZap } from "@/components/icons";
@@ -110,7 +111,7 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
 
         <div className="relative flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-[10px] bg-white/15 text-white flex items-center justify-center"><IconZap size={16} strokeWidth={2} /></div>
-          <span className="text-white font-semibold text-[15px]">Design Musketeer</span>
+          <span className="text-white font-semibold text-[15px]">{BRAND_NAME}</span>
         </div>
 
         <div className="relative flex-1 flex flex-col justify-center py-10">
@@ -134,7 +135,7 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
       <div className="flex-1 flex flex-col bg-white">
         <div className="md:hidden flex items-center gap-2.5 px-6 pt-6">
           <div className="w-8 h-8 rounded-[10px] bg-primary text-white flex items-center justify-center"><IconZap size={16} strokeWidth={2} /></div>
-          <span className="text-textPrimary font-semibold text-[15px]">AI Profit Systems</span>
+          <span className="text-textPrimary font-semibold text-[15px]">{BRAND_NAME}</span>
         </div>
 
         <div className="flex-1 flex items-center">
@@ -207,7 +208,7 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
         </div>
 
         <div className="text-center text-xs text-textSecondary px-6 pb-12 pt-4">
-          © AI Profit Systems · <a href="#" className="hover:text-textPrimary transition-colors duration-150">Privacy</a> · <a href="#" className="hover:text-textPrimary transition-colors duration-150">Terms</a>
+          © {BRAND_NAME} · <a href="#" className="hover:text-textPrimary transition-colors duration-150">Privacy</a> · <a href="#" className="hover:text-textPrimary transition-colors duration-150">Terms</a>
         </div>
       </div>
 

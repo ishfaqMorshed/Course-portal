@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Placeholder from "@/components/ui/Placeholder";
 import { IconSettings, IconZap, NavIcon } from "@/components/icons";
+import { BRAND_NAME } from "@/lib/brand";
 import { track, trackUpsellViewOnce } from "@/lib/track";
 import type { SidebarPromo } from "@/lib/types";
 
@@ -18,7 +19,7 @@ function Logo() {
       <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-white">
         <IconZap size={18} strokeWidth={2} />
       </div>
-      <span className="text-[15px] font-bold text-textPrimary tracking-tight">AI Profit</span>
+      <span className="text-[15px] font-bold text-textPrimary tracking-tight">{BRAND_NAME}</span>
     </div>
   );
 }
