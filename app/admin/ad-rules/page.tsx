@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button, Card, ErrorText, Field, PageHeader, Select, TextInput } from "@/components/admin/ui";
 import { useCoursePicker } from "@/components/admin/useCoursePicker";
 import { createAdRule, deleteAdRule, listAdRules, listLessons, listModules, updateAdRule } from "@/lib/admin/queries";
+import { uploadAdAsset } from "@/lib/admin/storage";
 import type { AdRuleRow, AdScope, LessonRow, ModuleRow, TriggerType } from "@/lib/admin/types";
 import { cleanUrlOrThrow } from "@/lib/url";
 
@@ -16,8 +17,24 @@ function RuleCard({ row, modules, lessons, onChange, onDelete }: {
 }) {
   const [d, setD] = useState(row);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<AdRuleRow>) => setD((x) => ({ ...x, ...patch }));
+
+  const onPickAsset = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    setUploading(true);
+    try {
+      set({ asset_url: await uploadAdAsset(row.course_id, file) });
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const save = async () => {
     setBusy(true);
@@ -90,13 +107,24 @@ function RuleCard({ row, modules, lessons, onChange, onDelete }: {
         <Field label="CTA label"><TextInput value={d.cta_label ?? ""} onChange={(e) => set({ cta_label: e.target.value })} placeholder="Learn more" /></Field>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-        <Field label="Asset URL" hint="Ad image (natural aspect ratio)"><TextInput value={d.asset_url ?? ""} onChange={(e) => set({ asset_url: e.target.value })} placeholder="https://…" /></Field>
+        <Field label="Asset URL" hint="Ad image — upload below, or paste a URL"><TextInput value={d.asset_url ?? ""} onChange={(e) => set({ asset_url: e.target.value })} placeholder="https://…" /></Field>
         <Field label="CTA URL"><TextInput value={d.cta_url ?? ""} onChange={(e) => set({ cta_url: e.target.value })} placeholder="https://…" /></Field>
       </div>
-      {d.asset_url?.trim() && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={d.asset_url} alt="" className="mt-3 max-h-40 w-auto rounded-card border border-line object-contain" />
-      )}
+      <div className="mt-4">
+        <span className="block text-[13px] font-semibold text-textPrimary mb-1.5">Ad image</span>
+        <div className="flex items-center gap-3">
+          <label className="inline-flex items-center justify-center gap-1.5 rounded-btn px-3.5 py-2 text-sm font-semibold bg-subtle text-textPrimary hover:bg-promo cursor-pointer">
+            <input type="file" accept="image/*" className="hidden" onChange={onPickAsset} disabled={uploading} />
+            {uploading ? "Uploading…" : d.asset_url ? "Replace image" : "Upload image"}
+          </label>
+          {d.asset_url && <Button variant="danger" onClick={() => set({ asset_url: null })}>Remove</Button>}
+        </div>
+        <p className="text-[12px] text-textSecondary mt-1">Uploaded to the public upsell-images bucket. Shown at natural aspect ratio on the ad overlay. Save to apply.</p>
+        {d.asset_url?.trim() && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={d.asset_url} alt="" className="mt-2 max-h-40 w-auto rounded-card border border-line object-contain" />
+        )}
+      </div>
       <ErrorText message={error} />
       <div className="flex items-center gap-2 mt-4">
         <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</Button>

@@ -35,3 +35,9 @@ export async function uploadUpsellImage(courseId: string, file: File): Promise<s
 export async function uploadThumbnail(courseId: string, file: File): Promise<string> {
   return uploadToBucket(courseId, file, "thumb/");
 }
+
+// In-video ad creative → ad_rules.asset_url. `ad/` prefix keeps it distinct from
+// upsell/thumbnail assets in the shared bucket.
+export async function uploadAdAsset(courseId: string, file: File): Promise<string> {
+  return uploadToBucket(courseId, file, "ad/");
+}
