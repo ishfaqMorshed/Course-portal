@@ -100,10 +100,15 @@ const LessonPlayer = forwardRef<LessonPlayerHandle, LessonPlayerProps>(function 
   }, [lessonId, url, source]);
 
   return (
+    // 16:9 box; the descendant rules force whatever the active adapter injects
+    // (Vimeo/YouTube iframe or HTML5 <video>) to fill it edge-to-edge — robust to
+    // each provider's own default width/height and to async iframe injection.
     <div
       ref={containerRef}
       title={title}
-      className="relative aspect-video rounded-2xl overflow-hidden bg-black"
+      className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black
+        [&_iframe]:absolute [&_iframe]:inset-0 [&_iframe]:h-full [&_iframe]:w-full [&_iframe]:border-0
+        [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
     />
   );
 });
