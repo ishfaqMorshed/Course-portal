@@ -6,6 +6,7 @@ export interface CourseRow {
   slug: string;
   title: string;
   status: "draft" | "published" | "archived";
+  thumbnail_url: string | null; // course card art (Phase 7); null = placeholder
 }
 
 export interface ModuleRow {
@@ -36,6 +37,7 @@ export interface LessonRow {
   video_source: VideoSource;
   description: string | null;
   resources: LessonResource[];
+  thumbnail_url: string | null; // lesson card art (Phase 7); null = placeholder
 }
 
 export type Placement = "rail" | "sidebar_promo" | "completion";

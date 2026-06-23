@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, ErrorText, Field, Select, TextArea, TextInput } from "@/components/admin/ui";
 import { deleteLesson, updateLesson } from "@/lib/admin/queries";
+import { uploadThumbnail } from "@/lib/admin/storage";
 import type { LessonResource, LessonRow, VideoSource } from "@/lib/admin/types";
 import { cleanUrlOrThrow } from "@/lib/url";
 
@@ -19,10 +20,12 @@ const SOURCES: { value: VideoSource; label: string }[] = [
 // lesson (manual "Mark complete").
 export default function LessonEditor({
   lesson,
+  courseId,
   onSaved,
   onDeleted,
 }: {
   lesson: LessonRow;
+  courseId: string;
   onSaved: (l: LessonRow) => void;
   onDeleted: (id: string) => void;
 }) {
@@ -31,8 +34,25 @@ export default function LessonEditor({
   const [ref, setRef] = useState(lesson.vimeo_id ?? "");
   const [description, setDescription] = useState(lesson.description ?? "");
   const [resources, setResources] = useState<LessonResource[]>(lesson.resources ?? []);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(lesson.thumbnail_url ?? null);
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const onPickThumb = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    setUploading(true);
+    try {
+      setThumbnailUrl(await uploadThumbnail(courseId, file));
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const setRes = (i: number, patch: Partial<LessonResource>) =>
     setResources((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -52,6 +72,7 @@ export default function LessonEditor({
         vimeo_id: ref.trim() || null, // pasted URL or bare ID, stored as-is
         description: description.trim() ? description.trim() : null,
         resources: cleanRes,
+        thumbnail_url: thumbnailUrl,
       });
       onSaved(saved);
       setError(null);
@@ -94,6 +115,22 @@ export default function LessonEditor({
       </div>
       <div className="mt-4">
         <Field label="Description"><TextArea value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+      </div>
+
+      <div className="mt-4">
+        <span className="block text-[13px] font-semibold text-textPrimary mb-1.5">Thumbnail</span>
+        <div className="flex items-center gap-3">
+          <label className="inline-flex items-center justify-center gap-1.5 rounded-btn px-3.5 py-2 text-sm font-semibold bg-subtle text-textPrimary hover:bg-promo cursor-pointer">
+            <input type="file" accept="image/*" className="hidden" onChange={onPickThumb} disabled={uploading} />
+            {uploading ? "Uploading…" : thumbnailUrl ? "Replace thumbnail" : "Upload thumbnail"}
+          </label>
+          {thumbnailUrl && <Button variant="danger" onClick={() => setThumbnailUrl(null)}>Remove</Button>}
+        </div>
+        <p className="text-[12px] text-textSecondary mt-1">Any size — shown cropped to fill a 16:10 card (object-cover). Save the lesson to apply.</p>
+        {thumbnailUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumbnailUrl} alt="" className="mt-2 w-48 aspect-[16/10] rounded-card border border-line object-cover" />
+        )}
       </div>
 
       <div className="mt-4">

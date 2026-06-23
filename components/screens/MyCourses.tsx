@@ -30,7 +30,15 @@ export default function MyCourses({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-[1000px]">
           {enrolledCourses.map((c) => (
             <div key={c.id} className="bg-white border border-line rounded-2xl shadow-card overflow-hidden flex flex-col">
-              <Placeholder label="course cover" className="aspect-[16/9]" />
+              {c.thumbnailUrl ? (
+                // Fixed 16:9 box + object-cover → any uploaded size fills cleanly.
+                <div className="relative aspect-[16/9]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                </div>
+              ) : (
+                <Placeholder label="course cover" className="aspect-[16/9]" />
+              )}
               <div className="p-5 flex flex-col gap-4 flex-1">
                 <div>
                   <h3 className="text-[15px] font-semibold text-textPrimary leading-snug">{c.title}</h3>

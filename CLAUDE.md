@@ -26,4 +26,4 @@ After verifying any phase passes its EXIT test, Claude Code commits with a descr
 ## Stack
 Next.js 14 (App Router) · TypeScript · Tailwind · Supabase (Auth, Postgres, pg_cron + pg_net, Edge Functions) · Vimeo Player API · Vercel. No Video.js. No localStorage in the client.
 
-## Current phase: 3
+## Current phase: 7

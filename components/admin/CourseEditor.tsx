@@ -14,6 +14,7 @@ import {
   updateCourse,
   updateModule,
 } from "@/lib/admin/queries";
+import { uploadThumbnail } from "@/lib/admin/storage";
 import type { CourseRow, LessonRow, ModuleRow } from "@/lib/admin/types";
 
 const STATUSES = ["draft", "published", "archived"] as const;
@@ -25,6 +26,7 @@ export default function CourseEditor({ courseId }: { courseId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -51,6 +53,21 @@ export default function CourseEditor({ courseId }: { courseId: string }) {
       const saved = await updateCourse(course.id, patch);
       setCourse(saved);
     } catch (e) { setError((e as Error).message); }
+  };
+
+  const onPickThumb = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    setUploadingThumb(true);
+    try {
+      const url = await uploadThumbnail(courseId, file);
+      await saveCourse({ thumbnail_url: url }); // persists immediately, like status
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploadingThumb(false);
+    }
   };
 
   // ---- modules ---- (every handler refetches from the DB after the write, so
@@ -110,6 +127,21 @@ export default function CourseEditor({ courseId }: { courseId: string }) {
           </Field>
         </div>
         <p className="text-[12px] text-textSecondary mt-2">Title/slug save on blur.</p>
+        <div className="mt-4">
+          <span className="block text-[13px] font-semibold text-textPrimary mb-1.5">Course thumbnail</span>
+          <div className="flex items-center gap-3">
+            <label className="inline-flex items-center justify-center gap-1.5 rounded-btn px-3.5 py-2 text-sm font-semibold bg-subtle text-textPrimary hover:bg-promo cursor-pointer">
+              <input type="file" accept="image/*" className="hidden" onChange={onPickThumb} disabled={uploadingThumb} />
+              {uploadingThumb ? "Uploading…" : course.thumbnail_url ? "Replace thumbnail" : "Upload thumbnail"}
+            </label>
+            {course.thumbnail_url && <Button variant="danger" onClick={() => saveCourse({ thumbnail_url: null })}>Remove</Button>}
+          </div>
+          <p className="text-[12px] text-textSecondary mt-1">Any size — shown cropped to fill a 16:9 card (object-cover). Saves immediately.</p>
+          {course.thumbnail_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={course.thumbnail_url} alt="" className="mt-2 w-64 aspect-[16/9] rounded-card border border-line object-cover" />
+          )}
+        </div>
       </Card>
 
       <div className="flex items-center justify-between mb-3">
@@ -150,6 +182,7 @@ export default function CourseEditor({ courseId }: { courseId: string }) {
                     <div className="px-3 pb-3">
                       <LessonEditor
                         lesson={l}
+                        courseId={courseId}
                         onSaved={() => load()}
                         onDeleted={() => { setExpanded(null); load(); }}
                       />

@@ -30,11 +30,13 @@ Out of scope: $497 checkout page (GHL), $497→$1997 upsell (human call), all em
 ## 3. Data model (canonical)
 
 ```
-courses(id, slug, title, status)
+courses(id, slug, title, status, thumbnail_url NULLABLE)
+  -- thumbnail_url (Phase 7) = course card art (Storage; rendered object-fit cover). NULL = placeholder.
 modules(id, course_id, sort, title)
-lessons(id, module_id, sort, title, vimeo_id NULLABLE, video_source, description, resources JSONB)
+lessons(id, module_id, sort, title, vimeo_id NULLABLE, video_source, description, resources JSONB, thumbnail_url NULLABLE)
   -- video_source (Phase 2.7-fix, 0009) ∈ vimeo|youtube|url ; vimeo_id REUSED as the generic
   --   video ref: Vimeo ID, YouTube ID, or direct URL per video_source. NULL/'' = no-video lesson.
+  -- thumbnail_url (Phase 7) = lesson card art (Storage; rendered object-fit cover). NULL = placeholder.
 users            -- Supabase auth.users + profiles(user_id, ghl_contact_id, email, is_admin)
   -- is_admin boolean default false (Phase 2.7) — gates /admin + admin-write RLS
 enrollments(id, user_id, course_id, source, created_at)
@@ -125,6 +127,16 @@ Render upsell_config per current module, escalation by intensity, CTA → GHL ch
 ### PHASE 6 — Hardening + deploy (Cursor)
 Idempotency, retries, refund stub (access revocation flag), Vercel deploy, custom domain, production GHL keys, full live dry run with a real $47 test purchase.
 **EXIT:** end-to-end production run: buy → email → login → watch → ad → complete → tags correct → upsell click correct.
+
+### PHASE 7 — Admin analytics + student management + thumbnails + login fix (Cursor)
+Four things, all admin-facing except the login fix and thumbnail rendering:
+1. **Admin analytics dashboard** (`/admin` analytics view): **revenue** = simple `count(enrollments) × $47` (no live $497, §1 status); **enrollment totals**; **segment distribution** bar/pie from `user_segments`; **upsell + ad engagement** bar/pie (counts of `upsell_view`/`upsell_click`/`ad_view`/`ad_skip`/`ad_click`) derived from the `events` table. Read-only aggregates — no new event types, no new tables.
+2. **Student management:** a student list (email · progress % · current segment · enrollment date), **filterable** (by segment/course) and **exportable** (CSV). Reads `enrollments` + `lesson_progress` + `user_segments` + `profiles` (admin-gated, `is_admin()`).
+3. **Course/lesson thumbnails:** new `courses.thumbnail_url` + `lessons.thumbnail_url` (Section 3 updated); image upload to a public Storage bucket (public read; admin-only write via `is_admin()`, like `upsell-images`); upload widgets in the admin course/lesson editors; the portal renders them **object-fit cover** on course cards + lesson thumbs (replaces placeholders).
+4. **Student blank-page login fix:** students currently see a blank screen until they click Dashboard — fix the initial screen/default route so an authed student lands on the Dashboard immediately on login.
+
+Schema: adds `thumbnail_url` to `courses` + `lessons` (Working-Rule-3 → Section 3 updated above). New Storage bucket(s) for thumbnails. Out of scope: time-series/cohort analytics, per-student drill-down, refund processing.
+**EXIT:** analytics shows correct revenue (= enrolled × $47), enrollment count, a segment chart, and upsell/ad engagement counts that match the `events` table; student list filters + CSV export work; course/lesson thumbnail upload → renders cover-fit in the portal; a freshly-logged-in student sees the Dashboard with no blank screen.
 
 ## 7. Working rules
 

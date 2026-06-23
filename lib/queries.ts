@@ -14,6 +14,7 @@ interface CourseTreeRow {
   video_source: "vimeo" | "youtube" | "url";
   description: string | null;
   resources: Resource[] | null;
+  thumbnail_url: string | null;
   pct: number;
   last_position: number;
   completed_at: string | null;
@@ -29,6 +30,7 @@ export interface EnrolledCourse {
   id: string;
   slug: string;
   title: string;
+  thumbnailUrl: string | null;
   totalLessons: number;
   completedLessons: number;
   pct: number;
@@ -61,6 +63,7 @@ export async function getEnrolledCourses(): Promise<EnrolledCourse[]> {
     id: r.course_id,
     slug: r.slug,
     title: r.title,
+    thumbnailUrl: r.thumbnail_url ?? null,
     totalLessons: Number(r.total_lessons),
     completedLessons: Number(r.completed_lessons),
     pct: Number(r.pct),
@@ -74,9 +77,9 @@ export async function getCourseTree(courseId: string): Promise<{ course: Course 
   const supabase = createClient();
 
   const { data: c } = await supabase
-    .from("courses").select("id, slug, title, status").eq("id", courseId).maybeSingle();
+    .from("courses").select("id, slug, title, status, thumbnail_url").eq("id", courseId).maybeSingle();
   const course: Course | null = c
-    ? { id: c.id, slug: c.slug, title: c.title, status: c.status, subtitle: "", coverLabel: "", lastLessonId: "" }
+    ? { id: c.id, slug: c.slug, title: c.title, status: c.status, thumbnailUrl: c.thumbnail_url ?? null, subtitle: "", coverLabel: "", lastLessonId: "" }
     : null;
 
   const { data, error } = await supabase.rpc("get_course_tree", { p_course_id: courseId });
@@ -98,6 +101,7 @@ export async function getCourseTree(courseId: string): Promise<{ course: Course 
       videoSource: r.video_source,
       description: r.description,
       resources: r.resources ?? [],
+      thumbnailUrl: r.thumbnail_url ?? null,
       hasVideo: !!(r.vimeo_id && r.vimeo_id.trim()),
       duration: "",
       thumbLabel: "",

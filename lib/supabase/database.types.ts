@@ -5,6 +5,7 @@ export interface EnrolledCourseRow {
   course_id: string;
   slug: string;
   title: string;
+  thumbnail_url: string | null;
   total_lessons: number;
   completed_lessons: number;
   pct: number;

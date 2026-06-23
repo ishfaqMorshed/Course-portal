@@ -22,7 +22,13 @@ export default function LessonThumbCard({
   return (
     <button onClick={onClick} style={width ? { width } : undefined} className="group text-left shrink-0 flex flex-col gap-2.5">
       <div className="relative rounded-[14px] overflow-hidden aspect-[16/10]">
-        <Placeholder label={lesson.thumbLabel || "lesson thumb"} className="absolute inset-0" />
+        {lesson.thumbnailUrl ? (
+          // Any uploaded size fills the fixed-aspect box cleanly — no distortion/overflow.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={lesson.thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <Placeholder label={lesson.thumbLabel || "lesson thumb"} className="absolute inset-0" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent"></div>
         {/* duration chip top-left */}
         <span className="absolute top-2.5 left-2.5 bg-black/55 text-white text-[11px] font-medium rounded-full px-2.5 py-1">{lesson.duration}</span>

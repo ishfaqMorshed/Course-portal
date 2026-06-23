@@ -35,6 +35,7 @@ export interface Lesson {
   videoSource: "vimeo" | "youtube" | "url";
   description: string | null;
   resources: Resource[];
+  thumbnailUrl?: string | null; // thumbnail_url (Phase 7); set by get_course_tree, omitted by legacy fixtures. null/"" = placeholder
 
   // ---- runtime-only, not a DB column ----
   hasVideo: boolean; // runtime-only, not a DB column (derived: vimeoId != null)
@@ -55,12 +56,13 @@ export interface Module {
   lessons: Lesson[]; // denormalized for rendering; canonically lessons reference module_id
 }
 
-// courses(id, slug, title, status)
+// courses(id, slug, title, status, thumbnail_url)
 export interface Course {
   id: string;
   slug: string;
   title: string;
   status: string; // "draft" | "published" | ...
+  thumbnailUrl?: string | null; // thumbnail_url (Phase 7); set by get_course_tree, omitted by legacy fixtures. null/"" = placeholder
 
   // ---- runtime-only, not a DB column ----
   subtitle: string; // runtime-only, not a DB column (presentation)

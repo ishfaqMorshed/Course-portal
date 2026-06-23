@@ -12,11 +12,18 @@ import UpsellPanel from "@/components/upsell/UpsellPanel";
 import { IconCheckCircle, IconClock, IconPlay, IconTrendUp } from "@/components/icons";
 import type { Course, Lesson, Module, ProgressMap, UpsellConfig } from "@/lib/types";
 
-function HeroCard({ lesson, courseTitle, moduleTitle, progress, onResume }: { lesson: Lesson; courseTitle: string; moduleTitle: string; progress: number; onResume: () => void }) {
+function HeroCard({ lesson, courseThumbnailUrl, courseTitle, moduleTitle, progress, onResume }: { lesson: Lesson; courseThumbnailUrl: string | null; courseTitle: string; moduleTitle: string; progress: number; onResume: () => void }) {
   return (
     <div className="bg-white border border-line rounded-2xl shadow-card overflow-hidden flex flex-col sm:flex-row">
-      <div className="sm:w-[42%] shrink-0 relative">
-        <Placeholder label={lesson.thumbLabel || "lesson thumbnail"} className="h-44 sm:h-full min-h-[180px]" />
+      <div className="sm:w-[42%] shrink-0 relative h-44 sm:h-auto sm:self-stretch min-h-[180px]">
+        {courseThumbnailUrl ? (
+          // This box shows the COURSE thumbnail (not the lesson's); object-cover
+          // fills the existing fixed box cleanly regardless of uploaded size.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={courseThumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <Placeholder label="course thumbnail" className="absolute inset-0" />
+        )}
         <span className="absolute top-3 left-3 bg-black/55 text-white text-[11px] font-medium rounded-full px-2.5 py-1 whitespace-nowrap">{lesson.duration}</span>
       </div>
       <div className="flex-1 p-6 flex flex-col">
@@ -82,7 +89,7 @@ export default function Dashboard({
       <div className="flex flex-col xl:flex-row gap-7">
         {/* main column */}
         <div className="flex-1 min-w-0 flex flex-col gap-7">
-          <HeroCard lesson={resumeLesson} courseTitle={courseTitle} moduleTitle={currentMod?.title ?? ""} progress={progressMap[resumeLesson.id] ?? 0} onResume={onResume} />
+          <HeroCard lesson={resumeLesson} courseThumbnailUrl={course?.thumbnailUrl ?? null} courseTitle={courseTitle} moduleTitle={currentMod?.title ?? ""} progress={progressMap[resumeLesson.id] ?? 0} onResume={onResume} />
 
           {/* stats row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
