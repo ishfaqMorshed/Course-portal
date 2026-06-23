@@ -48,9 +48,9 @@ export const FIXTURES: Fixtures = {
       sort: 1,
       title: "Foundations",
       lessons: [
-        { id: "m1l1", module_id: "m1", sort: 1, title: "Welcome & How This Works", description: null, vimeoId: "vimeo-m1l1", thumbLabel: "intro thumb",   duration: "6 min",  hasVideo: true,  progress: 100, resources: [] },
-        { id: "m1l2", module_id: "m1", sort: 2, title: "The AI Profit Mindset",    description: null, vimeoId: "vimeo-m1l2", thumbLabel: "mindset thumb", duration: "14 min", hasVideo: true,  progress: 100, resources: [] },
-        { id: "m1l3", module_id: "m1", sort: 3, title: "Setting Up Your Toolkit",  description: null, vimeoId: "vimeo-m1l3", thumbLabel: "toolkit thumb", duration: "18 min", hasVideo: true,  progress: 100,
+        { id: "m1l1", module_id: "m1", sort: 1, title: "Welcome & How This Works", description: null, vimeoId: "vimeo-m1l1", thumbLabel: "intro thumb",   duration: "6 min",  videoSource: "vimeo", hasVideo: true,  progress: 100, resources: [] },
+        { id: "m1l2", module_id: "m1", sort: 2, title: "The AI Profit Mindset",    description: null, vimeoId: "vimeo-m1l2", thumbLabel: "mindset thumb", duration: "14 min", videoSource: "vimeo", hasVideo: true,  progress: 100, resources: [] },
+        { id: "m1l3", module_id: "m1", sort: 3, title: "Setting Up Your Toolkit",  description: null, vimeoId: "vimeo-m1l3", thumbLabel: "toolkit thumb", duration: "18 min", videoSource: "vimeo", hasVideo: true,  progress: 100,
           resources: [
             { id: "r1", name: "Toolkit Checklist.pdf", size: "1.2 MB", kind: "pdf" },
             { id: "r2", name: "Starter Prompts.txt",   size: "8 KB",   kind: "txt" },
@@ -63,10 +63,10 @@ export const FIXTURES: Fixtures = {
       sort: 2,
       title: "Finding Your Niche",
       lessons: [
-        { id: "m2l1", module_id: "m2", sort: 1, title: "Market Research with AI",   description: null, vimeoId: "vimeo-m2l1", thumbLabel: "research thumb", duration: "21 min", hasVideo: true,  progress: 100, resources: [] },
-        { id: "m2l2", module_id: "m2", sort: 2, title: "Validating Demand Fast",    description: null, vimeoId: "vimeo-m2l2", thumbLabel: "demand thumb",   duration: "17 min", hasVideo: true,  progress: 40,  resources: [] },
-        { id: "m2l3", module_id: "m2", sort: 3, title: "Choosing Your First Offer", description: null, vimeoId: "vimeo-m2l3", thumbLabel: "offer thumb",    duration: "12 min", hasVideo: true,  progress: 0,   resources: [] },
-        { id: "m2l4", module_id: "m2", sort: 4, title: "Niche Worksheet",           description: null, vimeoId: null,         thumbLabel: "worksheet",     duration: "Read",   hasVideo: false, progress: 0,
+        { id: "m2l1", module_id: "m2", sort: 1, title: "Market Research with AI",   description: null, vimeoId: "vimeo-m2l1", thumbLabel: "research thumb", duration: "21 min", videoSource: "vimeo", hasVideo: true,  progress: 100, resources: [] },
+        { id: "m2l2", module_id: "m2", sort: 2, title: "Validating Demand Fast",    description: null, vimeoId: "vimeo-m2l2", thumbLabel: "demand thumb",   duration: "17 min", videoSource: "vimeo", hasVideo: true,  progress: 40,  resources: [] },
+        { id: "m2l3", module_id: "m2", sort: 3, title: "Choosing Your First Offer", description: null, vimeoId: "vimeo-m2l3", thumbLabel: "offer thumb",    duration: "12 min", videoSource: "vimeo", hasVideo: true,  progress: 0,   resources: [] },
+        { id: "m2l4", module_id: "m2", sort: 4, title: "Niche Worksheet",           description: null, vimeoId: null,         thumbLabel: "worksheet",     duration: "Read",   videoSource: "vimeo", hasVideo: false, progress: 0,
           resources: [
             { id: "r3", name: "Niche Worksheet.pdf", size: "640 KB", kind: "pdf" },
           ] },
@@ -78,9 +78,9 @@ export const FIXTURES: Fixtures = {
       sort: 3,
       title: "Building the System",
       lessons: [
-        { id: "m3l1", module_id: "m3", sort: 1, title: "Your Automation Stack", description: null, vimeoId: "vimeo-m3l1", thumbLabel: "stack thumb",    duration: "24 min", hasVideo: true, progress: 0, resources: [] },
-        { id: "m3l2", module_id: "m3", sort: 2, title: "Content Pipelines",     description: null, vimeoId: "vimeo-m3l2", thumbLabel: "pipeline thumb", duration: "19 min", hasVideo: true, progress: 0, resources: [] },
-        { id: "m3l3", module_id: "m3", sort: 3, title: "Pricing & Packaging",   description: null, vimeoId: "vimeo-m3l3", thumbLabel: "pricing thumb",  duration: "15 min", hasVideo: true, progress: 0, resources: [] },
+        { id: "m3l1", module_id: "m3", sort: 1, title: "Your Automation Stack", description: null, vimeoId: "vimeo-m3l1", thumbLabel: "stack thumb",    duration: "24 min", videoSource: "vimeo", hasVideo: true, progress: 0, resources: [] },
+        { id: "m3l2", module_id: "m3", sort: 2, title: "Content Pipelines",     description: null, vimeoId: "vimeo-m3l2", thumbLabel: "pipeline thumb", duration: "19 min", videoSource: "vimeo", hasVideo: true, progress: 0, resources: [] },
+        { id: "m3l3", module_id: "m3", sort: 3, title: "Pricing & Packaging",   description: null, vimeoId: "vimeo-m3l3", thumbLabel: "pricing thumb",  duration: "15 min", videoSource: "vimeo", hasVideo: true, progress: 0, resources: [] },
       ],
     },
     {
@@ -89,9 +89,9 @@ export const FIXTURES: Fixtures = {
       sort: 4,
       title: "Launch & Scale",
       lessons: [
-        { id: "m4l1", module_id: "m4", sort: 1, title: "Your First 10 Customers", description: null, vimeoId: "vimeo-m4l1", thumbLabel: "customers thumb", duration: "22 min", hasVideo: true, progress: 0, resources: [] },
-        { id: "m4l2", module_id: "m4", sort: 2, title: "Scaling Without Burnout", description: null, vimeoId: "vimeo-m4l2", thumbLabel: "scaling thumb",   duration: "16 min", hasVideo: true, progress: 0, resources: [] },
-        { id: "m4l3", module_id: "m4", sort: 3, title: "What's Next After Launch", description: null, vimeoId: "vimeo-m4l3", thumbLabel: "next thumb",     duration: "9 min",  hasVideo: true, progress: 0, resources: [] },
+        { id: "m4l1", module_id: "m4", sort: 1, title: "Your First 10 Customers", description: null, vimeoId: "vimeo-m4l1", thumbLabel: "customers thumb", duration: "22 min", videoSource: "vimeo", hasVideo: true, progress: 0, resources: [] },
+        { id: "m4l2", module_id: "m4", sort: 2, title: "Scaling Without Burnout", description: null, vimeoId: "vimeo-m4l2", thumbLabel: "scaling thumb",   duration: "16 min", videoSource: "vimeo", hasVideo: true, progress: 0, resources: [] },
+        { id: "m4l3", module_id: "m4", sort: 3, title: "What's Next After Launch", description: null, vimeoId: "vimeo-m4l3", thumbLabel: "next thumb",     duration: "9 min",  videoSource: "vimeo", hasVideo: true, progress: 0, resources: [] },
       ],
     },
   ],

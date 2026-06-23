@@ -61,8 +61,11 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
       setErrorMsg("Email or password is incorrect.");
       return;
     }
-    router.push("/");
-    router.refresh(); // re-run the server gate → authenticated → dashboard
+    // Admins land on the admin dashboard; everyone else on the portal. (Admins
+    // keep portal access via the "Portal" link — no forced global redirect.)
+    const { data: admin } = await supabase.rpc("is_admin");
+    router.push(admin === true ? "/admin" : "/");
+    router.refresh(); // re-run the server gate
   };
 
   // Fallback path — magic link. shouldCreateUser:false → only enrolled (pre-created)

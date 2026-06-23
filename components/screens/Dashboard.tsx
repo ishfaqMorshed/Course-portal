@@ -1,6 +1,5 @@
 "use client";
 
-import { FIXTURES } from "@/lib/fixtures";
 import { allLessons, computeStats, findLesson, moduleOf } from "@/lib/course";
 import Placeholder from "@/components/ui/Placeholder";
 import ProgressPill from "@/components/ui/ProgressPill";
@@ -11,11 +10,9 @@ import StatCard from "@/components/ui/StatCard";
 import ModuleProgressRail from "@/components/ui/ModuleProgressRail";
 import UpsellPanel from "@/components/upsell/UpsellPanel";
 import { IconCheckCircle, IconClock, IconPlay, IconTrendUp } from "@/components/icons";
-import type { Course, Lesson, ProgressMap, UpsellConfig } from "@/lib/types";
+import type { Course, Lesson, Module, ProgressMap, UpsellConfig } from "@/lib/types";
 
-const FX = FIXTURES;
-
-function HeroCard({ lesson, course, progress, onResume }: { lesson: Lesson; course: Course; progress: number; onResume: () => void }) {
+function HeroCard({ lesson, courseTitle, moduleTitle, progress, onResume }: { lesson: Lesson; courseTitle: string; moduleTitle: string; progress: number; onResume: () => void }) {
   return (
     <div className="bg-white border border-line rounded-2xl shadow-card overflow-hidden flex flex-col sm:flex-row">
       <div className="sm:w-[42%] shrink-0 relative">
@@ -25,7 +22,7 @@ function HeroCard({ lesson, course, progress, onResume }: { lesson: Lesson; cour
       <div className="flex-1 p-6 flex flex-col">
         <div className="text-xs font-semibold uppercase tracking-wide text-primary">Continue learning</div>
         <h3 className="text-xl font-bold text-textPrimary leading-7 mt-2">{lesson.title}</h3>
-        <p className="text-sm text-textSecondary mt-1">{course.title} · {moduleOf(lesson.id)?.title}</p>
+        <p className="text-sm text-textSecondary mt-1">{courseTitle} · {moduleTitle}</p>
         <div className="mt-auto pt-5">
           <div className="flex items-center justify-between text-xs text-textSecondary mb-2">
             <span>{Math.round(progress)}% watched</span>
@@ -39,8 +36,10 @@ function HeroCard({ lesson, course, progress, onResume }: { lesson: Lesson; cour
   );
 }
 
-// S2a — Dashboard (default after login).
+// S2a — Dashboard (default after login). Phase 2.7-fix: live modules + progress.
 export default function Dashboard({
+  modules,
+  course,
   progressMap,
   currentLessonId,
   onResume,
@@ -48,6 +47,8 @@ export default function Dashboard({
   onOpenCourse,
   upsellConfig,
 }: {
+  modules: Module[];
+  course: Course | null;
   progressMap: ProgressMap;
   currentLessonId: string;
   onResume: () => void;
@@ -55,13 +56,23 @@ export default function Dashboard({
   onOpenCourse: () => void;
   upsellConfig?: UpsellConfig;
 }) {
-  const stats = computeStats(progressMap);
-  const course = FX.courses[0];
-  const resumeLesson = findLesson(currentLessonId) || allLessons()[0];
-  const currentMod = moduleOf(resumeLesson.id)!;
+  void onOpenCourse;
+  const ls = allLessons(modules);
+  const stats = computeStats(modules, progressMap);
+  const courseTitle = course?.title ?? "";
+  const resumeLesson = findLesson(modules, currentLessonId) || ls[0];
 
-  // up-next: next not-completed lessons after current
-  const ls = allLessons();
+  if (!resumeLesson) {
+    return (
+      <div className="px-6 lg:px-9 py-7">
+        <div className="bg-white border border-line rounded-2xl shadow-card p-10 text-center">
+          <p className="text-sm text-textSecondary">No course content yet. Once lessons are published they’ll appear here.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentMod = moduleOf(modules, resumeLesson.id);
   const upNext = ls.filter((l) => (progressMap[l.id] ?? 0) < 100).slice(0, 6);
 
   return (
@@ -69,7 +80,7 @@ export default function Dashboard({
       <div className="flex flex-col xl:flex-row gap-7">
         {/* main column */}
         <div className="flex-1 min-w-0 flex flex-col gap-7">
-          <HeroCard lesson={resumeLesson} course={course} progress={progressMap[resumeLesson.id] ?? 0} onResume={onResume} />
+          <HeroCard lesson={resumeLesson} courseTitle={courseTitle} moduleTitle={currentMod?.title ?? ""} progress={progressMap[resumeLesson.id] ?? 0} onResume={onResume} />
 
           {/* stats row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -88,8 +99,8 @@ export default function Dashboard({
 
         {/* right rail */}
         <aside className="w-full xl:w-[320px] shrink-0 flex flex-col gap-5">
-          <ModuleProgressRail modules={FX.modules} progressMap={progressMap} currentModuleId={currentMod.id} pctTotal={stats.pct}
-            onSelectModule={(m) => onOpenLesson(m.lessons[0].id)} />
+          <ModuleProgressRail modules={modules} progressMap={progressMap} currentModuleId={currentMod?.id ?? ""} pctTotal={stats.pct}
+            onSelectModule={(m) => m.lessons[0] && onOpenLesson(m.lessons[0].id)} />
           <UpsellPanel config={upsellConfig} />
         </aside>
       </div>

@@ -1,22 +1,20 @@
 "use client";
 
-// Static 1:1 shell (DESIGN-BRIEF nav target). FROZEN: do not expand scope in
-// future phases without a MASTER.md update.
+// Static 1:1 shell (DESIGN-BRIEF nav target). Phase 2.7-fix: resources read live
+// from the course tree (Module[]) instead of fixtures — same visual structure.
 
-import { FIXTURES } from "@/lib/fixtures";
 import ResourceRow from "@/components/ui/ResourceRow";
 import { IconFolder } from "@/components/icons";
+import type { Module } from "@/lib/types";
 
-const FX = FIXTURES;
-
-export default function ResourcesScreen({ onOpenLesson }: { onOpenLesson?: (id: string) => void }) {
+export default function ResourcesScreen({ modules = [], onOpenLesson }: { modules?: Module[]; onOpenLesson?: (id: string) => void }) {
   void onOpenLesson; // reserved for parity with the export's signature
-  const groups = FX.modules
+  const groups = modules
     .map((m) => ({
       module: m,
       items: m.lessons
         .filter((l) => l.resources.length)
-        .flatMap((l) => l.resources.map((r) => ({ ...r, lessonId: l.id, lessonTitle: l.title }))),
+        .flatMap((l) => l.resources.map((r, i) => ({ ...r, key: (r.id ?? r.name) + ":" + i, lessonId: l.id, lessonTitle: l.title }))),
     }))
     .filter((g) => g.items.length);
   return (
@@ -30,10 +28,11 @@ export default function ResourcesScreen({ onOpenLesson }: { onOpenLesson?: (id: 
             <span className="text-xs text-textSecondary">· {g.items.length} files</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {g.items.map((r) => <ResourceRow key={r.id} resource={r} sub={"From: " + r.lessonTitle} />)}
+            {g.items.map((r) => <ResourceRow key={r.key} resource={r} sub={"From: " + r.lessonTitle} />)}
           </div>
         </div>
       ))}
+      {groups.length === 0 && <p className="text-sm text-textSecondary">No resources yet.</p>}
     </div>
   );
 }

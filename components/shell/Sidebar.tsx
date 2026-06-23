@@ -1,10 +1,8 @@
 "use client";
 
-import { FIXTURES } from "@/lib/fixtures";
 import Placeholder from "@/components/ui/Placeholder";
 import { IconSettings, IconZap, NavIcon } from "@/components/icons";
-
-const F = FIXTURES;
+import type { SidebarPromo } from "@/lib/types";
 
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: "grid" },
@@ -24,8 +22,8 @@ function Logo() {
 }
 
 // S0 sidebar body: logo · nav · lavender promo card · bottom-anchored Settings.
-export default function Sidebar({ active, onNav }: { active: string; onNav: (id: string) => void }) {
-  const promo = F.sidebarPromo;
+// promo is the live sidebar_promo upsell (Phase 2.7-fix); null → card hidden.
+export default function Sidebar({ active, onNav, promo }: { active: string; onNav: (id: string) => void; promo?: SidebarPromo | null }) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 pt-7 pb-8">
@@ -47,17 +45,23 @@ export default function Sidebar({ active, onNav }: { active: string; onNav: (id:
       </nav>
 
       <div className="mt-auto px-4 pb-4 flex flex-col gap-2">
-        {/* lavender promo card */}
-        <div className="bg-promo rounded-2xl p-4 flex flex-col items-center text-center gap-3">
-          <Placeholder label={promo.illustrationLabel} className="w-full h-20 rounded-xl bg-white/50" />
-          <p className="text-xs text-textPrimary leading-4 font-medium">
-            {promo.line1}<br /><span className="font-bold">{promo.line2}</span>
-          </p>
-          <button onClick={() => window.open(promo.url, "_blank")}
-            className="w-full bg-white border-[1.5px] border-primary text-primary text-xs font-semibold rounded-[10px] py-2 hover:bg-white/70 transition-colors">
-            {promo.cta}
-          </button>
-        </div>
+        {/* lavender promo card (live sidebar_promo upsell) */}
+        {promo && (
+          <div className="bg-promo rounded-2xl p-4 flex flex-col items-center text-center gap-3">
+            {promo.imageUrl
+              ? <img src={promo.imageUrl} alt="" className="w-full h-auto max-h-40 object-contain rounded-xl bg-white/50" />
+              : <Placeholder label={promo.illustrationLabel} className="w-full h-20 rounded-xl bg-white/50" />}
+            {/* headline bold, body normal (was inverted) */}
+            <div className="text-xs leading-4 text-textPrimary">
+              <div className="font-bold">{promo.line1}</div>
+              {promo.line2 && <div className="font-medium mt-0.5">{promo.line2}</div>}
+            </div>
+            <button onClick={() => window.open(promo.url, "_blank")}
+              className="w-full bg-white border-[1.5px] border-primary text-primary text-xs font-semibold rounded-[10px] py-2 hover:bg-white/70 transition-colors">
+              {promo.cta}
+            </button>
+          </div>
+        )}
         {/* settings, bottom-anchored */}
         <button onClick={() => onNav("settings")}
           className={"relative flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-sm font-medium transition-colors " +

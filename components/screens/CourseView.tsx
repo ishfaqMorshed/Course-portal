@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FIXTURES } from "@/lib/fixtures";
 import { allLessons, findLesson, moduleOf, nextLessonId } from "@/lib/course";
+import { resolveAdRule, resolveCompletionUpsell, resolveRailUpsell } from "@/lib/portal-map";
 import LessonThumbCard from "@/components/ui/LessonThumbCard";
 import ScrollRow from "@/components/ui/ScrollRow";
 import ProgressPill from "@/components/ui/ProgressPill";
 import ResourceRow from "@/components/ui/ResourceRow";
 import Toast from "@/components/ui/Toast";
 import { BtnPrimary } from "@/components/ui/Buttons";
-import MockPlayer from "@/components/player/MockPlayer";
+import VideoEmbed from "@/components/player/VideoEmbed";
 import AdOverlay from "@/components/ad/AdOverlay";
 import UpsellPanel from "@/components/upsell/UpsellPanel";
 import {
@@ -23,9 +23,11 @@ import {
   IconPlay,
   IconTrophy,
 } from "@/components/icons";
-import type { Module, ProgressMap } from "@/lib/types";
+import type { AdRuleRow, UpsellRow } from "@/lib/admin/types";
+import type { Course, Module, ProgressMap } from "@/lib/types";
 
-const FX = FIXTURES;
+const DEFAULT_LESSON_DESC =
+  "Work through this lesson, then continue to the next. Resources for the lesson appear below when available.";
 
 function ModuleGroup({
   module,
@@ -46,7 +48,7 @@ function ModuleGroup({
   useEffect(() => { if (defaultOpen) setOpen(true); }, [defaultOpen]);
   const done = module.lessons.filter((l) => (progressMap[l.id] ?? 0) >= 100).length;
   const total = module.lessons.length;
-  const moduleDone = done === total;
+  const moduleDone = total > 0 && done === total;
   const isCurrent = module.lessons.some((l) => l.id === currentLessonId);
   return (
     <div className="border-b border-line last:border-b-0">
@@ -87,51 +89,59 @@ function ModuleGroup({
   );
 }
 
-function CompletionPanel() {
+function CompletionPanel({ total, courseTitle }: { total: number; courseTitle: string }) {
   return (
     <div data-screen-label="Course complete" className="bg-white border border-line rounded-2xl shadow-card p-10 flex flex-col items-center text-center gap-4">
       <div className="w-16 h-16 rounded-full bg-primarySoft text-primary flex items-center justify-center"><IconTrophy size={30} /></div>
       <div>
         <h2 className="text-2xl font-bold text-textPrimary leading-8">Course complete</h2>
-        <p className="text-sm text-textSecondary mt-2 max-w-[400px]">You finished all {allLessons().length} lessons of AI Profit Systems. Every lesson stays unlocked — rewatch anything, anytime.</p>
+        <p className="text-sm text-textSecondary mt-2 max-w-[400px]">You finished all {total} lessons of {courseTitle}. Every lesson stays unlocked — rewatch anything, anytime.</p>
       </div>
       <ProgressPill pct={100} className="w-48" />
     </div>
   );
 }
 
-// S3 — Course View (3-zone inside shell).
+// S3 — Course View (3-zone inside shell). Phase 2.7-fix: live tree/upsell/ads.
 export default function CourseView({
+  modules,
+  course,
+  upsells,
+  adRules,
   progressMap,
   setLessonPct,
   currentLessonId,
   setCurrentLessonId,
   onLogout,
-  upsellOverride,
   adSignal,
   simSeconds,
   dev,
 }: {
+  modules: Module[];
+  course: Course | null;
+  upsells: UpsellRow[];
+  adRules: AdRuleRow[];
   progressMap: ProgressMap;
   setLessonPct: (id: string, pct: number) => void;
   currentLessonId: string;
   setCurrentLessonId: (id: string) => void;
   onLogout?: () => void;
-  upsellOverride: string;
   adSignal: number;
   simSeconds: number;
   dev: boolean;
 }) {
   void onLogout; // kept for parity with the export's signature
-  const lesson = findLesson(currentLessonId) || allLessons()[0];
-  const module = moduleOf(lesson.id)!;
+  const ls = allLessons(modules);
+  const lesson = findLesson(modules, currentLessonId) || ls[0];
   const [adOpen, setAdOpen] = useState(false);
   const [adShownFor, setAdShownFor] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<string | null>(null);
-  const courseComplete = allLessons().every((l) => (progressMap[l.id] ?? 0) >= 100);
 
-  useEffect(() => { if (adSignal > 0) setAdOpen(true); }, [adSignal]);
+  const ad = lesson ? resolveAdRule(adRules, lesson.id, moduleOf(modules, lesson.id)?.id ?? null) : undefined;
+
+  useEffect(() => { if (adSignal > 0 && ad) setAdOpen(true); }, [adSignal, ad]);
   useEffect(() => {
+    if (!lesson) return;
     const p = progressMap[lesson.id] ?? 0;
     if (p > 0 && p < 100) {
       setToast("Continuing where you left off — " + Math.round(p) + "% watched");
@@ -139,20 +149,27 @@ export default function CourseView({
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lesson.id]);
+  }, [lesson?.id]);
 
+  if (!lesson) {
+    return (
+      <div className="p-8">
+        <div className="bg-white border border-line rounded-2xl shadow-card p-10 text-center">
+          <p className="text-sm text-textSecondary">No lessons published for this course yet.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const module = moduleOf(modules, lesson.id)!;
+  const courseComplete = ls.length > 0 && ls.every((l) => (progressMap[l.id] ?? 0) >= 100);
   const closeAd = () => { setAdOpen(false); setAdShownFor((s) => ({ ...s, [lesson.id]: true })); };
 
-  const upsellKey = upsellOverride && upsellOverride !== "auto" ? upsellOverride : null;
   const upsellConfig = courseComplete
-    ? FX.upsellConfig.m5_complete
-    : upsellKey
-      ? Object.values(FX.upsellConfig).find((u) => String(u.intensity) === upsellKey) || FX.upsellConfig[FX.upsellModuleMap[module.id]]
-      : FX.upsellConfig[FX.upsellModuleMap[module.id]];
+    ? resolveCompletionUpsell(upsells)
+    : resolveRailUpsell(upsells, module.id);
 
-  const nextId = nextLessonId(lesson.id);
-  const ad = FX.adRule;
-  const ls = allLessons();
+  const nextId = nextLessonId(modules, lesson.id);
 
   return (
     <div className="flex flex-col">
@@ -169,7 +186,7 @@ export default function CourseView({
         {/* left: module list */}
         <aside className="lg:w-[260px] shrink-0 border-b lg:border-b-0 lg:border-r border-line">
           <div className="px-4 pt-5 pb-3"><div className="text-xs font-semibold uppercase tracking-wide text-textSecondary">Course content</div></div>
-          {FX.modules.map((m, i) => (
+          {modules.map((m, i) => (
             <ModuleGroup key={m.id} module={m} idx={i} progressMap={progressMap}
               currentLessonId={lesson.id} defaultOpen={m.id === module.id}
               onSelect={(id) => setCurrentLessonId(id)} />
@@ -182,21 +199,18 @@ export default function CourseView({
             <main className="flex-1 min-w-0 max-w-[760px] flex flex-col gap-6">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-textSecondary">{module.title}</div>
-                <h1 className="text-2xl font-bold text-textPrimary leading-8 mt-1">{courseComplete ? "AI Profit Systems" : lesson.title}</h1>
+                <h1 className="text-2xl font-bold text-textPrimary leading-8 mt-1">{courseComplete ? (course?.title ?? "Course") : lesson.title}</h1>
               </div>
 
               {courseComplete ? (
-                <CompletionPanel />
+                <CompletionPanel total={ls.length} courseTitle={course?.title ?? "this course"} />
               ) : lesson.hasVideo ? (
                 <div className="relative">
-                  <MockPlayer lesson={lesson} pct={progressMap[lesson.id] ?? 0}
-                    onPctChange={(p) => setLessonPct(lesson.id, p)}
-                    adOpen={adOpen} adAlreadyShown={!!adShownFor[lesson.id]}
-                    onAdTrigger={() => setAdOpen(true)} simSeconds={simSeconds} />
-                  {adOpen && (
-                    <AdOverlay asset={ad.assetLabel} headline={ad.headline} ctaLabel={ad.ctaLabel} ctaUrl={ad.ctaUrl}
+                  <VideoEmbed source={lesson.videoSource} url={lesson.vimeoId ?? ""} title={lesson.title} />
+                  {adOpen && ad && (
+                    <AdOverlay assetUrl={ad.assetUrl} headline={ad.headline} ctaLabel={ad.ctaLabel} ctaUrl={ad.ctaUrl}
                       skippableAfterS={ad.skippableAfterS} onSkip={closeAd} onClose={closeAd}
-                      onClick={(url) => window.open(url, "_blank")} />
+                      onClick={(url) => url && window.open(url, "_blank")} />
                   )}
                 </div>
               ) : (
@@ -216,7 +230,7 @@ export default function CourseView({
 
               {!courseComplete && (
                 <div className="flex items-start justify-between gap-4">
-                  <p className="text-sm text-textSecondary leading-[22px] max-w-[560px]">{FX.lessonDescriptions.default}</p>
+                  <p className="text-sm text-textSecondary leading-[22px] max-w-[560px]">{lesson.description || DEFAULT_LESSON_DESC}</p>
                   {nextId && (
                     <button onClick={() => setCurrentLessonId(nextId)} className="shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primaryHover">
                       Next lesson <IconArrowRight size={15} />
@@ -229,7 +243,7 @@ export default function CourseView({
                 <div className="flex flex-col gap-3">
                   <h2 className="text-lg font-bold text-textPrimary">Additional Materials</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {lesson.resources.map((r) => <ResourceRow key={r.id} resource={r} />)}
+                    {lesson.resources.map((r, i) => <ResourceRow key={(r.id ?? r.name) + ":" + i} resource={r} />)}
                   </div>
                 </div>
               )}
@@ -237,8 +251,8 @@ export default function CourseView({
               {/* dev-only ad-trigger hint (gated by ?dev=1) */}
               {dev && !courseComplete && lesson.hasVideo && (
                 <div className="border-[1.5px] border-dashed border-canvasDeep rounded-2xl px-4 py-3 flex items-center justify-between">
-                  <span className="font-mono text-[11px] text-textSecondary">dev: pop-ad fires at {ad.triggerAtPct}% of any video</span>
-                  <button onClick={() => setAdOpen(true)} className="font-mono text-[11px] font-semibold text-primary underline">trigger ad now</button>
+                  <span className="font-mono text-[11px] text-textSecondary">{ad ? `dev: live ad_rule (${ad.triggerType}=${ad.triggerValue}) — auto-fire is Phase 3` : "dev: no active ad rule for this lesson"}</span>
+                  {ad && <button onClick={() => setAdOpen(true)} className="font-mono text-[11px] font-semibold text-primary underline">trigger ad now</button>}
                 </div>
               )}
             </main>

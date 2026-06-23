@@ -9,9 +9,14 @@ export default function ResourceRow({ resource, sub }: { resource: Resource; sub
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[15px] font-semibold text-textPrimary truncate">{resource.name}</div>
-        <div className="text-xs text-textSecondary mt-0.5 line-clamp-1">{sub || resource.size + " · click to download"}</div>
+        <div className="text-xs text-textSecondary mt-0.5 line-clamp-1">{sub || (resource.size ? resource.size + " · click to download" : "click to download")}</div>
       </div>
-      <button className="w-10 h-10 rounded-full border border-line flex items-center justify-center text-primary hover:bg-primarySoft shrink-0" title="Download">
+      <button
+        onClick={() => resource.url && window.open(resource.url, "_blank")}
+        disabled={!resource.url}
+        className="w-10 h-10 rounded-full border border-line flex items-center justify-center text-primary hover:bg-primarySoft shrink-0 disabled:opacity-40"
+        title={resource.url ? "Download" : "No link"}
+      >
         <IconDownload size={18} />
       </button>
     </div>

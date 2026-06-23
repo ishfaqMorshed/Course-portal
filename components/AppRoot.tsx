@@ -2,19 +2,20 @@
 
 // ============================================================
 // AppRoot.tsx — screen state machine (ported from the design export's App()).
-// Phase 2: auth-gated. When authed, starts on the dashboard and renders the
-// shell; My Courses + the shell identity come from real data. Dashboard /
-// CourseView / Resources remain on fixtures (Phase 2 = EXIT-minimal reads).
-// Dev affordances stay behind ?dev=1.
+// Phase 2.7-fix: auth-gated AND data-live. The course tree, progress, upsell,
+// ad config and sidebar promo all come from the DB (props from the server page),
+// not fixtures. Visual structure is unchanged. Dev affordances stay behind ?dev=1.
 // ============================================================
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FIXTURES } from "@/lib/fixtures";
-import { computeStats, initialProgress, moduleOf, type ProgressMap } from "@/lib/course";
+import { computeStats, initialProgress, moduleOf, resumeLessonId, type ProgressMap } from "@/lib/course";
+import { resolveRailUpsell, resolveSidebarPromo } from "@/lib/portal-map";
 import { createClient } from "@/lib/supabase/client";
 import { CurrentUserProvider } from "@/lib/current-user";
 import type { CurrentUser, EnrolledCourse } from "@/lib/queries";
+import type { AdRuleRow, UpsellRow } from "@/lib/admin/types";
+import type { Course, Module } from "@/lib/types";
 import AppShell from "@/components/shell/AppShell";
 import LoginScreen from "@/components/screens/LoginScreen";
 import Dashboard from "@/components/screens/Dashboard";
@@ -25,16 +26,13 @@ import CourseView from "@/components/screens/CourseView";
 import {
   TweakButton,
   TweakSection,
-  TweakSelect,
   TweakSlider,
   TweakToggle,
   TweaksPanel,
   useTweaks,
 } from "@/components/dev/Tweaks";
-import type { UpsellConfig } from "@/lib/types";
 
 const TWEAK_DEFAULTS = {
-  upsellIntensity: "5",
   emptyCourses: false,
   simSeconds: 24,
 };
@@ -54,32 +52,42 @@ export default function AppRoot({
   authed,
   initialUser,
   enrolledCourses = [],
+  course = null,
+  modules = [],
+  upsells = [],
+  adRules = [],
 }: {
   dev: boolean;
   authed: boolean;
   initialUser?: CurrentUser | null;
   enrolledCourses?: EnrolledCourse[];
+  course?: Course | null;
+  modules?: Module[];
+  upsells?: UpsellRow[];
+  adRules?: AdRuleRow[];
 }) {
   const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [screen, setScreen] = useState<Screen>(authed ? "dashboard" : "login");
-  const [progressMap, setProgressMap] = useState<ProgressMap>(initialProgress);
-  const [currentLessonId, setCurrentLessonId] = useState<string>(FIXTURES.courses[0].lastLessonId);
+  const [progressMap, setProgressMap] = useState<ProgressMap>(() => initialProgress(modules));
+  const [currentLessonId, setCurrentLessonId] = useState<string>(() =>
+    resumeLessonId(modules, initialProgress(modules)),
+  );
   const [adSignal, setAdSignal] = useState(0);
 
-  const F = FIXTURES;
-  const displayName = initialUser?.name ?? F.user.name;
+  const displayName = initialUser?.name ?? "Learner";
+  const sidebarPromo = resolveSidebarPromo(upsells);
   const setLessonPct = (id: string, pct: number) => setProgressMap((m) => ({ ...m, [id]: pct }));
 
   const completeAll = () => {
     const m: ProgressMap = {};
-    F.modules.forEach((mod) => mod.lessons.forEach((l) => { m[l.id] = 100; }));
+    modules.forEach((mod) => mod.lessons.forEach((l) => { m[l.id] = 100; }));
     setProgressMap(m);
     setScreen("course");
   };
-  const resetProgress = () => setProgressMap(initialProgress());
+  const resetProgress = () => setProgressMap(initialProgress(modules));
   const openLesson = (id: string) => { setCurrentLessonId(id); setScreen("course"); };
-  const stats = computeStats(progressMap);
+  const stats = computeStats(modules, progressMap);
 
   const logout = async () => {
     const supabase = createClient();
@@ -87,20 +95,14 @@ export default function AppRoot({
     router.refresh(); // re-run the server gate → unauthenticated → login
   };
 
-  // upsell config for dashboard (current module or tweak override) — still fixtures
-  const curMod = moduleOf(currentLessonId) || F.modules[0];
-  const upsellKey = String(t.upsellIntensity) !== "auto" ? String(t.upsellIntensity) : null;
-  const dashUpsell: UpsellConfig | undefined = upsellKey
-    ? Object.values(F.upsellConfig).find((u) => String(u.intensity) === upsellKey) || F.upsellConfig[F.upsellModuleMap[curMod.id]]
-    : F.upsellConfig[F.upsellModuleMap[curMod.id]];
+  // rail upsell for the dashboard (current module) — live upsell_config
+  const curMod = moduleOf(modules, currentLessonId) || modules[0];
+  const dashUpsell = curMod ? resolveRailUpsell(upsells, curMod.id) : undefined;
 
   function tweaksPanel() {
     if (!dev) return null;
     return (
       <TweaksPanel>
-        <TweakSection label="Upsell panel" />
-        <TweakSelect label="Intensity" value={String(t.upsellIntensity)}
-          options={["auto", "1", "2", "4", "5"]} onChange={(v) => setTweak("upsellIntensity", v)} />
         <TweakSection label="Player" />
         <TweakSlider label="Demo video length" value={t.simSeconds} min={8} max={60} step={1} unit="s"
           onChange={(v) => setTweak("simSeconds", v)} />
@@ -114,7 +116,7 @@ export default function AppRoot({
     );
   }
 
-  // ---- Not authenticated → login only (real magic-link auth) ----
+  // ---- Not authenticated → login only ----
   if (!authed) {
     return (
       <CurrentUserProvider value={initialUser ?? null}>
@@ -130,14 +132,14 @@ export default function AppRoot({
     courses: { active: "courses", title: "My Courses", subtitle: "Your enrolled programs." },
     resources: { active: "resources", title: "Resources", subtitle: null },
     settings: { active: "settings", title: "Settings", subtitle: null },
-    course: { active: "courses", title: F.courses[0].title, onBack: () => setScreen("courses"), backLabel: "My Courses" },
+    course: { active: "courses", title: course?.title ?? "Course", onBack: () => setScreen("courses"), backLabel: "My Courses" },
   }[screen as Exclude<Screen, "login">];
 
   return (
     <CurrentUserProvider value={initialUser ?? null}>
-      <AppShell {...shellProps} onNav={(id) => setScreen(id as Screen)} onLogout={logout}>
+      <AppShell {...shellProps} onNav={(id) => setScreen(id as Screen)} onLogout={logout} sidebarPromo={sidebarPromo}>
         {screen === "dashboard" && (
-          <Dashboard progressMap={progressMap} currentLessonId={currentLessonId}
+          <Dashboard modules={modules} course={course} progressMap={progressMap} currentLessonId={currentLessonId}
             onResume={() => setScreen("course")} onOpenLesson={openLesson}
             onOpenCourse={() => setScreen("course")} upsellConfig={dashUpsell} />
         )}
@@ -145,13 +147,13 @@ export default function AppRoot({
           <MyCourses enrolledCourses={enrolledCourses} emptyStateOverride={t.emptyCourses}
             onOpenCourse={() => setScreen("course")} />
         )}
-        {screen === "resources" && <ResourcesScreen onOpenLesson={openLesson} />}
+        {screen === "resources" && <ResourcesScreen modules={modules} onOpenLesson={openLesson} />}
         {screen === "settings" && <SettingsScreen onLogout={logout} />}
         {screen === "course" && (
-          <CourseView progressMap={progressMap} setLessonPct={setLessonPct}
+          <CourseView modules={modules} course={course} upsells={upsells} adRules={adRules}
+            progressMap={progressMap} setLessonPct={setLessonPct}
             currentLessonId={currentLessonId} setCurrentLessonId={setCurrentLessonId}
-            onLogout={logout} upsellOverride={String(t.upsellIntensity)}
-            adSignal={adSignal} simSeconds={t.simSeconds} dev={dev} />
+            onLogout={logout} adSignal={adSignal} simSeconds={t.simSeconds} dev={dev} />
         )}
       </AppShell>
       {tweaksPanel()}

@@ -29,11 +29,11 @@ Rule: GHL credentials never reach the browser. All GHL calls go through Edge Fun
 | S2a Up-next row | next 3 uncompleted lessons in course order | lessons LEFT JOIN lesson_progress |
 | S2a Right-rail module progress | same `get_course_tree` as S3 sidebar (shared hook) | modules + lessons + lesson_progress |
 | S2b My Courses grid | `get_enrolled_courses(user)` | view joining enrollments→courses + progress % |
-| S3 Sidebar | `get_course_tree(course_id, user)` | modules + lessons LEFT JOIN lesson_progress |
-| S3 Player resume | `lesson_progress.last_position` | lesson_progress |
-| S3 Resources row | `lessons.resources` JSONB | lessons |
-| S3 Upsell panel (right rail) | `get_upsell(course_id, current_module_id, placement='rail')`; course-complete state uses placement='completion' | upsell_config |
-| O1 Ad overlay props | `get_ad_rules(course_id, lesson_id)` | ad_rules (most specific scope wins: lesson > module > course) |
+| S3 Sidebar | `get_course_tree(course_id)` ✅ wired (Phase 2.7-fix) | modules + lessons LEFT JOIN lesson_progress |
+| S3 Player resume | `lesson_progress.last_position` (read via get_course_tree; *writes* Phase 3) | lesson_progress |
+| S3 Resources row | `lessons.resources` JSONB ✅ wired (via get_course_tree) | lessons |
+| S3 Upsell panel (right rail) | live `upsell_config` rows → resolved client-side (rail by current module; completion on course-complete; sidebar_promo = shell promo) ✅ wired (Phase 2.7-fix) | upsell_config |
+| O1 Ad overlay props | live `ad_rules` → resolved client-side, most specific scope wins lesson > module > course ✅ wired. Both pct & timestamp_s fire (timestamp_s mock-approximated vs simSeconds in 2.7; exact seconds Phase 3). headline/cta_label/asset_url editable (0007); blank copy → neutral defaults | ad_rules |
 | Manual Mark-complete btn | `rpc complete_lesson(lesson_id)` | same path as auto-complete (below) |
 
 ## 2. Event emission map (UI action → events row → side effects)
@@ -101,10 +101,12 @@ Thresholds read from `segment_config` per course. Job must be idempotent (re-run
 
 | Phase | Wire up | Leave mocked |
 |---|---|---|
-| 2 | Section 0, 1 (auth + reads), `wh-purchase-47` | events, ads, upsell config (still fixtures) |
-| 3 | Sections 2, 3, 4 + `push-lesson-event` | segment tags (log only) |
+| 2 | Section 0, 1 (auth + My Courses read), `wh-purchase-47` | course tree, events, ads, upsell (fixtures) |
+| 2.7 | Admin Dashboard (content/config CRUD, is_admin RLS) | — |
+| 2.7-fix | `get_course_tree` + live portal reads (CourseView/Dashboard/sidebar/resources/upsell/ad **config**); admin write-masking fixes; admin sidebar shell | progress *writes*, events, GHL push (Phase 3) |
+| 3 | Section 2 (events via `track`), Section 3 (real Vimeo player + progress writes + `complete_lesson`), Section 4 (ad *events*), `push-lesson-event` | segment tags (log only) |
 | 4 | Sections 5 (`sync-segment-tag`, `wh-purchase-497`), 6 | — |
-| 5 | Upsell panel real config + upsell events | — |
+| 5 | Upsell events (config already live in 2.7-fix) | — |
 | 6 | Hardening: retries, idempotency audit, deploy | — |
 
 ## 8. Guardrails for the agent
@@ -114,3 +116,15 @@ Thresholds read from `segment_config` per course. Job must be idempotent (re-run
 3. Every GHL call must write a ghl_sync_log row, success or failure.
 4. All writes RLS-protected; service role only inside Edge Functions.
 5. After each phase, output the EXIT test steps from MASTER.md §6 for the human to run. Do not self-certify.
+
+## 9. Admin Dashboard (Phase 2.7)
+
+Internal `/admin` tooling for content/config entry (no new env, no edge functions).
+- **Access:** `profiles.is_admin` boolean; `public.is_admin()` SECURITY DEFINER helper. Guard = server layout (`app/admin/layout.tsx`) + middleware, never client-only. Grant via one-time SQL.
+- **Writes:** client-side CRUD through the authenticated admin session, gated by admin-write RLS (`is_admin()`) on courses/modules/lessons/upsell_config/ad_rules/segment_config. Reads on those tables = enrolled OR admin. `segment_config` gains admin read/write; `ghl_sync_log` stays service-only.
+- **ad_rules targeting (Option A):** added `module_id`/`lesson_id` columns → the §4 "lesson > module > course" precedence is now expressible (NULL target = course-wide).
+- **UI (Phase 2.7-fix):** admin nav is a left **sidebar shell** matching the portal; admins land on `/admin` after login (portal still reachable via "Back to portal"). Writes **refetch** after every mutation; deletes use `.select()` + row-count check so RLS-denied deletes error instead of silently succeeding.
+- **Read sync (Phase 2.7-fix):** the portal reads admin-entered content/config live via `get_course_tree` + `upsell_config`/`ad_rules` selects, so admin edits appear in the portal (after reload).
+- **Media/copy (0007):** `upsell_config.image_url` (promo art) renders in the upsell panel + sidebar promo at natural aspect ratio (object-contain, capped height). `ad_rules.headline`/`cta_label` make the ad overlay copy editable (asset_url = ad image). Admin URL fields are normalized on save (`lib/url.ts` — collapses `https://https://`, adds a missing scheme, rejects invalid).
+- **Storage (0008):** upsell promo art is uploaded to the public `upsell-images` bucket (public read; admin-only write via `is_admin()`); the public URL is stored in `image_url`. Upload widget in the admin upsell editor (`lib/admin/storage.ts`).
+- **Multi-source video (0009):** `lessons.video_source` ∈ vimeo|youtube|url; `vimeo_id` reused as the generic ref (id or URL), normalized in the admin editor (`lib/video.ts`). `get_course_tree` returns `video_source`. Player adapters are **Phase 3** (see MASTER §6 Phase 3) — 2.7 still uses the mock player, which now surfaces source + ref for verification.

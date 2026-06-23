@@ -1,26 +1,27 @@
 // ============================================================
-// course.ts — pure helpers over the fixtures (ported from screens.jsx).
+// course.ts — pure helpers over a course tree (Module[]). Phase 2.7-fix: these
+// no longer read FIXTURES; the live tree comes from get_course_tree and is
+// passed in by the caller (AppRoot threads it to Dashboard/CourseView).
 // ============================================================
 
-import { FIXTURES } from "./fixtures";
 import type { Lesson, Module, ProgressMap } from "./types";
 
 export type { ProgressMap } from "./types";
 
-export function allLessons(): Lesson[] {
-  return FIXTURES.modules.flatMap((m) => m.lessons);
+export function allLessons(modules: Module[]): Lesson[] {
+  return modules.flatMap((m) => m.lessons);
 }
 
-export function findLesson(id: string): Lesson | undefined {
-  return allLessons().find((l) => l.id === id);
+export function findLesson(modules: Module[], id: string): Lesson | undefined {
+  return allLessons(modules).find((l) => l.id === id);
 }
 
-export function moduleOf(lessonId: string): Module | undefined {
-  return FIXTURES.modules.find((m) => m.lessons.some((l) => l.id === lessonId));
+export function moduleOf(modules: Module[], lessonId: string): Module | undefined {
+  return modules.find((m) => m.lessons.some((l) => l.id === lessonId));
 }
 
-export function nextLessonId(lessonId: string): string | null {
-  const ls = allLessons();
+export function nextLessonId(modules: Module[], lessonId: string): string | null {
+  const ls = allLessons(modules);
   const i = ls.findIndex((l) => l.id === lessonId);
   return i >= 0 && i < ls.length - 1 ? ls[i + 1].id : null;
 }
@@ -36,11 +37,11 @@ export interface Stats {
   watchTime: string;
 }
 
-export function computeStats(progressMap: ProgressMap): Stats {
-  const ls = allLessons();
+export function computeStats(modules: Module[], progressMap: ProgressMap): Stats {
+  const ls = allLessons(modules);
   const total = ls.length;
   const completed = ls.filter((l) => (progressMap[l.id] ?? 0) >= 100).length;
-  const pct = Math.round((completed / total) * 100);
+  const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
   let watchedMin = 0;
   ls.forEach((l) => {
     watchedMin += durMin(l) * ((progressMap[l.id] ?? 0) / 100);
@@ -53,12 +54,16 @@ export function computeStats(progressMap: ProgressMap): Stats {
   return { total, completed, pct, watchTime: wt };
 }
 
-export function initialProgress(): ProgressMap {
+// Initial in-memory progress from the live tree (lesson.progress = pct).
+export function initialProgress(modules: Module[]): ProgressMap {
   const map: ProgressMap = {};
-  FIXTURES.modules.forEach((m) =>
-    m.lessons.forEach((l) => {
-      map[l.id] = l.progress;
-    }),
-  );
+  modules.forEach((m) => m.lessons.forEach((l) => { map[l.id] = l.progress; }));
   return map;
+}
+
+// "Continue" target: first not-completed lesson, else the first lesson.
+export function resumeLessonId(modules: Module[], progressMap: ProgressMap): string {
+  const ls = allLessons(modules);
+  const next = ls.find((l) => (progressMap[l.id] ?? 0) < 100);
+  return (next ?? ls[0])?.id ?? "";
 }

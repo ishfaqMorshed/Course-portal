@@ -12,6 +12,10 @@ export default function UpsellPanel({ config }: { config?: UpsellConfig }) {
   const open = () => window.open(config.url, "_blank");
   return (
     <div data-comment-anchor="upsell-panel" className={"rounded-2xl p-6 transition-colors " + shells[tier]}>
+      {config.imageUrl && (
+        // Natural aspect ratio (object-contain, no crop); max-h caps a tall portrait.
+        <img src={config.imageUrl} alt="" className="w-full h-auto max-h-72 object-contain rounded-xl mb-5 bg-white/40" />
+      )}
       {tier === 3 && config.urgency && (
         <div className="inline-flex items-center gap-1.5 bg-white/15 text-white text-xs font-semibold rounded-full px-3 py-1.5 mb-4">
           <IconClock size={13} /> {config.urgency}

@@ -7,7 +7,7 @@ import { IconArrowRight, IconCheckCircle, IconX } from "@/components/icons";
 
 // O1 — In-video pop-ad overlay. States: locked countdown · skippable · clicked.
 export default function AdOverlay({
-  asset,
+  assetUrl,
   headline,
   ctaLabel,
   ctaUrl,
@@ -16,7 +16,7 @@ export default function AdOverlay({
   onClick,
   onClose,
 }: {
-  asset: string;
+  assetUrl: string | null;
   headline: string;
   ctaLabel: string;
   ctaUrl: string;
@@ -40,7 +40,9 @@ export default function AdOverlay({
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center p-4 sm:p-8 rounded-2xl" style={{ background: "rgba(31,34,51,0.55)", backdropFilter: "blur(2px)" }}>
       <div className="bg-white rounded-2xl w-full max-w-[420px] overflow-hidden shadow-float">
-        <Placeholder label={asset} className="aspect-video w-full" />
+        {assetUrl
+          ? <img src={assetUrl} alt="" className="w-full h-auto max-h-72 object-contain bg-subtle" />
+          : <Placeholder label="ad creative 16:9" className="aspect-video w-full" />}
         <div className="p-5 sm:p-6 flex flex-col gap-4">
           <h3 className="text-lg font-bold text-textPrimary leading-[26px] text-center">{headline}</h3>
           <BtnPrimary onClick={handleCta} className="w-full">

@@ -30,21 +30,29 @@ Out of scope: $497 checkout page (GHL), $497→$1997 upsell (human call), all em
 ```
 courses(id, slug, title, status)
 modules(id, course_id, sort, title)
-lessons(id, module_id, sort, title, vimeo_id NULLABLE, description, resources JSONB)
-users            -- Supabase auth.users + profiles(user_id, ghl_contact_id, email)
+lessons(id, module_id, sort, title, vimeo_id NULLABLE, video_source, description, resources JSONB)
+  -- video_source (Phase 2.7-fix, 0009) ∈ vimeo|youtube|url ; vimeo_id REUSED as the generic
+  --   video ref: Vimeo ID, YouTube ID, or direct URL per video_source. NULL/'' = no-video lesson.
+users            -- Supabase auth.users + profiles(user_id, ghl_contact_id, email, is_admin)
+  -- is_admin boolean default false (Phase 2.7) — gates /admin + admin-write RLS
 enrollments(id, user_id, course_id, source, created_at)
 lesson_progress(id, user_id, lesson_id, seconds_watched, pct, completed_at NULLABLE, last_position)
 events(id, user_id, course_id, type, payload JSONB, created_at)
   -- type ∈ login | lesson_started | lesson_completed | course_completed
   --        | upsell_view | upsell_click | ad_view | ad_skip | ad_click
-upsell_config(id, course_id, module_id NULLABLE, placement, headline, body, cta_label, cta_url, intensity)
+upsell_config(id, course_id, module_id NULLABLE, placement, headline, body, cta_label, cta_url, intensity, image_url NULLABLE)
   -- placement ∈ rail | sidebar_promo | completion ; sidebar_promo rows have module_id NULL (global)
-ad_rules(id, course_id, scope, trigger_type, trigger_value, skippable_after_s, asset_url, cta_url, active)
+  -- image_url (Phase 2.7-fix, 0007) = promo art URL (no Storage; URL only)
+ad_rules(id, course_id, scope, module_id NULLABLE, lesson_id NULLABLE, trigger_type, trigger_value, skippable_after_s, asset_url, cta_url, active, headline NULLABLE, cta_label NULLABLE)
   -- scope: course|module|lesson; trigger_type: pct|timestamp_s
+  -- module_id/lesson_id (Phase 2.7, Option A) = scope target: NULL=course-wide; set for module/lesson scope
+  -- asset_url = ad image; headline/cta_label (Phase 2.7-fix, 0007) = overlay copy (default to neutral text when blank)
 segment_config(course_id, stalled_after_days, never_activated_after_days, ...)
 user_segments(user_id, course_id, segment, changed_at)  -- current segment, one row per user+course
 ghl_sync_log(id, user_id, action, tag, status, response, created_at)  -- audit trail
 ```
+
+Read RPCs: `get_enrolled_courses()` (Phase 2), `get_course_tree(course_id)` (Phase 2.7-fix — live modules+lessons+per-user progress; the portal reads this instead of fixtures). Admin RPC: `is_admin()` SECURITY DEFINER (Phase 2.7).
 
 ## 4. The six segments (state machine)
 
@@ -91,9 +99,17 @@ Spec: `docs/PHASE-2.5-SPEC.md` (implements §8 TC1). Replace the auto-login magi
 Touches: `wh-purchase-47` (recovery token + `/setup` URL), new `/setup` route + screen, `LoginScreen` (password field + `signInWithPassword`), `supabase/config.toml` (email+password, `minimum_password_length`, `otp_expiry`, `enable_signup=false`) + matching hosted-dashboard Auth toggles. Out of scope: events, ads, upsell, segments, $497.
 **EXIT:** run `docs/PHASE-2.5-SPEC.md` EXIT steps (welcome link → /setup → set password → dashboard; logout → email+password login; tampered token / wrong email → "Email is not registered."; forgot-password magic link; claimed token reuse rejected).
 
-### PHASE 3 — Player + tracking engine (Cursor)
-Vimeo Player API wiring (resume, timeupdate checkpoints every 10s, 90% → lesson_completed), event writes, per-lesson GHL push (D3), rule-based ad engine (pause → overlay → log ad_view/ad_skip/ad_click → resume).
-**EXIT:** watch test lesson to 90% → event row + lesson_progress.completed_at set + GHL contact shows the event. Ad fires per rule, skip + click logged.
+### PHASE 2.7 — Admin Dashboard (Cursor)  ← built before Phase 3
+Spec: `docs/PHASE-2.7-ADMIN-SPEC.md`. Internal `/admin` tooling to enter real content/config that Phases 3–5 test against. `profiles.is_admin` flag (+ `ad_rules.module_id`/`lesson_id` targets, Option A); `public.is_admin()` SECURITY DEFINER helper; admin-write RLS on courses/modules/lessons/upsell_config/ad_rules/segment_config (read = enrolled OR admin; write = admin only; service role unaffected). Routes: `/admin` (server-layout guard + middleware), Courses (+ module/lesson editor with vimeo_id, resources, up/down reorder), Upsells (rail/sidebar_promo/completion), Ad Rules (scope + target picker), Segments (thresholds). Client-side CRUD through the RLS-gated admin session; no new edge functions or secrets. Out of scope: analytics, student mgmt, audit log.
+**EXIT:** run `docs/PHASE-2.7-ADMIN-SPEC.md` EXIT steps (is_admin gate; create/edit lesson with real vimeo_id; no-video flag; edit rail/sidebar/completion upsells; create ad_rule; edit segment_config; reorder modules/lessons). Then resume Phase 3.
+
+#### PHASE 2.7-fix — portal read-wiring + admin fixes (Cursor)
+Follow-up to 2.7 (admin edits weren't appearing in the portal). Three things, all built: (1) **pulled `get_course_tree` forward from Phase 3** (`supabase/migrations/0006`) and wired the portal read path — CourseView, sidebar, All-Lessons row, resources, progress, the upsell panel (live `upsell_config`), the sidebar promo, and the ad engine (live `ad_rules`) now read from the DB, not fixtures; Dashboard wired live too (shared `progressMap`/`lib/course`). (2) Fixed admin write-masking — forms refetch after every write; deletes use `.select()` + row-count check so an RLS-denied delete errors instead of silently "succeeding". (3) Admin UX — admins land on `/admin` after login (portal still reachable); admin nav moved from a top bar to a left **sidebar shell** matching the portal. **Read-path only:** progress *writes*, `complete_lesson`, and event logging remain Phase 3. Known gap: `ad_rules` has no headline/cta-label columns → ad copy uses neutral defaults (asset_url/cta_url are live).
+**EXIT:** admin edit to a module/lesson/upsell/ad → visible in the portal after reload; RLS-denied delete shows an error (not silent); admin login → `/admin`; admin nav is a left sidebar.
+
+### PHASE 3 — Player + tracking engine (Cursor)  ← re-scoped (tree-read now done in 2.7-fix)
+**Multi-source player** (Phase 2.7-fix added `lessons.video_source` ∈ vimeo|youtube|url): a `LessonPlayer` wrapper switches on `video_source` to one of **three provider adapters** behind a common `{percent, seconds, duration}` interface — **Vimeo** (`@vimeo/player`: `timeupdate`/`getDuration`/`setCurrentTime`), **YouTube** (IFrame API `YT.Player`: no native timeupdate → **poll** getCurrentTime/getDuration; `seekTo`), **Direct URL** (HTML5 `<video>`: `timeupdate`/`currentTime`/`duration`). Each does resume via `last_position`, 10s checkpoints, 90% → `lesson_completed`. The tracking engine stays provider-agnostic: progress **writes** to `lesson_progress`, the `track(type,payload)` event helper (incl. `lesson_started` + ad_view/ad_skip/ad_click + upsell_view/click), `complete_lesson` RPC, and `push-lesson-event` edge fn (D3). The ad engine's `timestamp_s` becomes real per provider (2.7 uses a mock-pct approximation). The live read path (`get_course_tree`, upsell/ad config) is already wired (2.7-fix) — Phase 3 does NOT re-do it. New deps: `@vimeo/player` + YouTube IFrame API. Depends on Phase 2.7 for real video refs + config.
+**EXIT:** watch test lesson to 90% → event row + `lesson_progress.completed_at` set + GHL contact shows the event. Ad fires per rule, skip + click logged.
 
 ### PHASE 4 — Segment engine (Cursor)
 Event-driven transitions + daily pg_cron job for time-based segments + tag swap edge function + dfy suppression.

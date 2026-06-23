@@ -16,10 +16,11 @@ export type ProgressMap = Record<LessonId, number>;
 
 // lessons.resources JSONB (MASTER.md §3)
 export interface Resource {
-  id: string;
+  id?: string; // fixtures only; live rows are keyed by name/url
   name: string;
-  size: string;
-  kind: string; // "pdf" | "txt" | ...
+  size?: string; // fixtures only; not entered in the admin editor
+  kind: string; // "pdf" | "txt" | "link" | ...
+  url?: string; // live download/target (admin editor); fixtures omit it
 }
 
 // lessons(id, module_id, sort, title, vimeo_id NULLABLE, description, resources JSONB)
@@ -28,7 +29,10 @@ export interface Lesson {
   module_id: string;
   sort: number;
   title: string;
-  vimeoId: string | null; // vimeo_id — null = no-video lesson (D1: manual "Mark complete")
+  // vimeo_id reused as the generic video ref (0009): Vimeo ID, YouTube ID, or a
+  // direct URL depending on videoSource. null/"" = no-video lesson (manual complete).
+  vimeoId: string | null;
+  videoSource: "vimeo" | "youtube" | "url";
   description: string | null;
   resources: Resource[];
 
@@ -71,6 +75,7 @@ export interface UpsellConfig {
   placement: "rail" | "sidebar_promo" | "completion";
   socialProof: string | null;
   urgency: string | null;
+  imageUrl?: string | null; // -> image_url (0007)
 }
 
 // ad_rules(id, course_id, scope, trigger_type, trigger_value, skippable_after_s, asset_url, cta_url, active)
@@ -100,6 +105,7 @@ export interface SidebarPromo {
   line2: string;
   cta: string;
   url: string;
+  imageUrl?: string | null; // -> upsell_config.image_url (0007)
 
   // ---- runtime-only, not a DB column ----
   illustrationLabel: string; // runtime-only, not a DB column (placeholder art label)
