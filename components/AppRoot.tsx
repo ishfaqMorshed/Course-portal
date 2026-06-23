@@ -67,7 +67,13 @@ export default function AppRoot({
 }) {
   const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [screen, setScreen] = useState<Screen>(authed ? "dashboard" : "login");
+  // Default to "dashboard" regardless of auth: the unauthenticated UI is handled
+  // by the `if (!authed)` early-return below, NOT by this screen state. Seeding
+  // "login" here caused a blank page — after sign-in, router.refresh() re-renders
+  // this same client instance with authed=true but React preserves state, leaving
+  // screen="login", which matches no in-shell branch. "login" is never a valid
+  // in-shell screen, so it must never be the seed.
+  const [screen, setScreen] = useState<Screen>("dashboard");
   // Phase 3 progress model split: progressMap = watched pct (drives bars);
   // completedSet = which lessons are DONE (drives every ✓ / done-count, since a
   // lesson completes at 70% watched — pct < 100 can still be complete).
