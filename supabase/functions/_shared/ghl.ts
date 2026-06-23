@@ -43,8 +43,11 @@ function ghlHeaders(): HeadersInit {
 export type GhlResult = { ok: boolean; status: number; body: unknown; attempts: number };
 
 // Fetch with retry + exponential backoff on 429 / 5xx (MASTER §5, CONNECTION-MAP §5).
-// 4xx (other than 429) is non-retryable — returned immediately.
-async function ghlFetch(url: string, init: RequestInit, maxAttempts = 3): Promise<GhlResult> {
+// 4xx (other than 429) is non-retryable — returned immediately. Never throws:
+// network errors are caught and surfaced as status 0 (so callers can log, not lose).
+// Generic (no GHL headers added here) → reused for the GHL inbound webhook POST in
+// push-lesson-event, not just GHL API v2 calls.
+export async function fetchWithRetry(url: string, init: RequestInit, maxAttempts = 3): Promise<GhlResult> {
   let attempt = 0;
   let last: { status: number; body: unknown } = { status: 0, body: null };
   while (attempt < maxAttempts) {
@@ -82,7 +85,7 @@ async function ghlFetch(url: string, init: RequestInit, maxAttempts = 3): Promis
 
 // Add seg_ tag(s) to a contact (v2). Idempotent on GHL's side (re-adding is a no-op).
 export async function addContactTags(contactId: string, tags: string[]): Promise<GhlResult> {
-  return ghlFetch(`${GHL_BASE}/contacts/${contactId}/tags`, {
+  return fetchWithRetry(`${GHL_BASE}/contacts/${contactId}/tags`, {
     method: "POST",
     headers: ghlHeaders(),
     body: JSON.stringify({ tags }),
@@ -91,7 +94,7 @@ export async function addContactTags(contactId: string, tags: string[]): Promise
 
 // Remove seg_ tag(s) from a contact (v2).
 export async function removeContactTags(contactId: string, tags: string[]): Promise<GhlResult> {
-  return ghlFetch(`${GHL_BASE}/contacts/${contactId}/tags`, {
+  return fetchWithRetry(`${GHL_BASE}/contacts/${contactId}/tags`, {
     method: "DELETE",
     headers: ghlHeaders(),
     body: JSON.stringify({ tags }),
@@ -103,7 +106,7 @@ export async function removeContactTags(contactId: string, tags: string[]): Prom
 export async function findContactByEmail(email: string): Promise<string | null> {
   const loc = Deno.env.get("GHL_LOCATION_ID");
   const url = `${GHL_BASE}/contacts/?locationId=${loc}&query=${encodeURIComponent(email)}`;
-  const res = await ghlFetch(url, { method: "GET", headers: ghlHeaders() });
+  const res = await fetchWithRetry(url, { method: "GET", headers: ghlHeaders() });
   if (!res.ok) return null;
   const contacts = ((res.body as any)?.contacts ?? []) as any[];
   const lower = email.toLowerCase();

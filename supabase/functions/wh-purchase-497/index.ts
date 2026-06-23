@@ -29,14 +29,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: "unauthorized" }, 401);
   }
 
+  const db = serviceClient();
+
   let body: any;
   try {
     body = await req.json();
   } catch {
+    // Log, don't vanish (MASTER §5 — every failure path is auditable).
+    await logSync(db, { action: "wh-purchase-497", status: "failed", response: { error: "invalid_json" } });
     return json({ error: "invalid_json" }, 400);
   }
-
-  const db = serviceClient();
 
   // 2. Map payload (same envelope shape as wh-purchase-47).
   const payment = body?.payment ?? {};
@@ -47,6 +49,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const totalAmount: number | undefined = payment?.total_amount;
 
   if (!email || !transactionId) {
+    await logSync(db, {
+      action: "wh-purchase-497",
+      status: "failed",
+      response: { error: "missing_required_fields", email, contact_id: contactId, transaction_id: transactionId },
+    });
     return json({ error: "missing_required_fields", need: ["email", "payment.transaction_id"] }, 400);
   }
 

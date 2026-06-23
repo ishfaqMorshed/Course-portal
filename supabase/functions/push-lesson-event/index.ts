@@ -13,7 +13,7 @@
 // touches tags). Idempotent: a prior success row for (user, lesson) → 200 no-op.
 // ============================================================
 
-import { logSync, serviceClient } from "../_shared/ghl.ts";
+import { fetchWithRetry, logSync, serviceClient } from "../_shared/ghl.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -132,33 +132,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     completed_at: completedAt,
   };
 
-  try {
-    const res = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    let respBody: unknown;
-    try {
-      respBody = await res.json();
-    } catch {
-      respBody = await res.text();
-    }
-    await logSync(db, {
-      user_id: user.id,
-      action: "push-lesson-event",
-      status: res.ok ? "success" : "failed",
-      response: { lesson_id: lessonId, contact_id: contactId, email, http_status: res.status, body: respBody },
-    });
-    if (!res.ok) return json({ ok: false, http_status: res.status }, 200);
-    return json({ ok: true });
-  } catch (err) {
-    await logSync(db, {
-      user_id: user.id,
-      action: "push-lesson-event",
-      status: "failed",
-      response: { lesson_id: lessonId, contact_id: contactId, email, error: String((err as Error)?.message ?? err) },
-    });
-    return json({ ok: false, error: "push_failed" }, 200);
-  }
+  // Retry + exponential backoff on 429/5xx + network errors (MASTER §5). A
+  // transient failure must not silently lose the completion note — fetchWithRetry
+  // never throws; it surfaces the final result + attempt count, which we log.
+  const res = await fetchWithRetry(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  await logSync(db, {
+    user_id: user.id,
+    action: "push-lesson-event",
+    status: res.ok ? "success" : "failed",
+    response: { lesson_id: lessonId, contact_id: contactId, email, http_status: res.status, attempts: res.attempts, body: res.body },
+  });
+  if (!res.ok) return json({ ok: false, http_status: res.status, attempts: res.attempts }, 200);
+  return json({ ok: true, attempts: res.attempts });
 });
