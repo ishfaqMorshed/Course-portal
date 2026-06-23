@@ -16,7 +16,7 @@ Out of scope: $497 checkout page (GHL), $497→$1997 upsell (human call), all em
 
 | # | Decision | Value |
 |---|---|---|
-| D1 | Lesson completion | Auto at **90% watched** (Vimeo Player API). Manual "Mark complete" button ONLY for lessons with no video |
+| D1 | Lesson completion | Auto at **70% watched** (provider Player APIs — Vimeo/YouTube/HTML5). Manual "Mark complete" button available on **every** lesson: the sole completion path for no-video lessons, and a manual override for video lessons (Phase 3 re-scope) |
 | D2 | In-video pop ad | **Rule-based** engine (rules in `ad_rules` config, e.g. "midpoint of every lesson video", skippable after N seconds) |
 | D3 | Per-lesson GHL event | **Every** lesson completion fires an outbound event to a GHL webhook/workflow (generic trigger→action config, not hardcoded) |
 | D4 | v1 scope | **Single-course extensible** — UI shows one course; schema is multi-course from day one |
@@ -52,7 +52,7 @@ user_segments(user_id, course_id, segment, changed_at)  -- current segment, one 
 ghl_sync_log(id, user_id, action, tag, status, response, created_at)  -- audit trail
 ```
 
-Read RPCs: `get_enrolled_courses()` (Phase 2), `get_course_tree(course_id)` (Phase 2.7-fix — live modules+lessons+per-user progress; the portal reads this instead of fixtures). Admin RPC: `is_admin()` SECURITY DEFINER (Phase 2.7).
+Read RPCs: `get_enrolled_courses()` (Phase 2), `get_course_tree(course_id)` (Phase 2.7-fix — live modules+lessons+per-user progress; the portal reads this instead of fixtures). Write RPC: `complete_lesson(lesson_id)` SECURITY INVOKER (Phase 3 — idempotently sets `lesson_progress.completed_at`, writes the `lesson_completed` event, and the `course_completed` event when all lessons are done; backed by unique partial indexes on `events` so each fires once per user+lesson / user+course). Admin RPC: `is_admin()` SECURITY DEFINER (Phase 2.7).
 
 ## 4. The six segments (state machine)
 
@@ -108,8 +108,8 @@ Follow-up to 2.7 (admin edits weren't appearing in the portal). Three things, al
 **EXIT:** admin edit to a module/lesson/upsell/ad → visible in the portal after reload; RLS-denied delete shows an error (not silent); admin login → `/admin`; admin nav is a left sidebar.
 
 ### PHASE 3 — Player + tracking engine (Cursor)  ← re-scoped (tree-read now done in 2.7-fix)
-**Multi-source player** (Phase 2.7-fix added `lessons.video_source` ∈ vimeo|youtube|url): a `LessonPlayer` wrapper switches on `video_source` to one of **three provider adapters** behind a common `{percent, seconds, duration}` interface — **Vimeo** (`@vimeo/player`: `timeupdate`/`getDuration`/`setCurrentTime`), **YouTube** (IFrame API `YT.Player`: no native timeupdate → **poll** getCurrentTime/getDuration; `seekTo`), **Direct URL** (HTML5 `<video>`: `timeupdate`/`currentTime`/`duration`). Each does resume via `last_position`, 10s checkpoints, 90% → `lesson_completed`. The tracking engine stays provider-agnostic: progress **writes** to `lesson_progress`, the `track(type,payload)` event helper (incl. `lesson_started` + ad_view/ad_skip/ad_click + upsell_view/click), `complete_lesson` RPC, and `push-lesson-event` edge fn (D3). The ad engine's `timestamp_s` becomes real per provider (2.7 uses a mock-pct approximation). The live read path (`get_course_tree`, upsell/ad config) is already wired (2.7-fix) — Phase 3 does NOT re-do it. New deps: `@vimeo/player` + YouTube IFrame API. Depends on Phase 2.7 for real video refs + config.
-**EXIT:** watch test lesson to 90% → event row + `lesson_progress.completed_at` set + GHL contact shows the event. Ad fires per rule, skip + click logged.
+**Multi-source player** (Phase 2.7-fix added `lessons.video_source` ∈ vimeo|youtube|url): a `LessonPlayer` wrapper switches on `video_source` to one of **three provider adapters** behind a common `{percent, seconds, duration}` interface — **Vimeo** (`@vimeo/player`: `timeupdate`/`getDuration`/`setCurrentTime`), **YouTube** (IFrame API `YT.Player`: no native timeupdate → **poll** getCurrentTime/getDuration; `seekTo`), **Direct URL** (HTML5 `<video>`: `timeupdate`/`currentTime`/`duration`). Each does resume via `last_position`, 10s checkpoints, **70%** → `lesson_completed` (D1). A manual **"Mark complete"** button is shown on every lesson (sole path for no-video; override for video) and hits the same `complete_lesson` path. The tracking engine stays provider-agnostic: progress **writes** to `lesson_progress`, the `track(type,payload)` event helper (incl. `lesson_started` + ad_view/ad_skip/ad_click; upsell_view/click stay Phase 5), `complete_lesson` RPC, and `push-lesson-event` edge fn (D3). The ad engine's `timestamp_s` becomes real per provider (2.7 uses a mock-pct approximation). The live read path (`get_course_tree`, upsell/ad config) is already wired (2.7-fix) — Phase 3 does NOT re-do it. New deps: `@vimeo/player` + YouTube IFrame API. Depends on Phase 2.7 for real video refs + config.
+**EXIT:** watch test lesson to 70% → event row + `lesson_progress.completed_at` set + GHL contact shows the event. Manual "Mark complete" on a video lesson and a no-video lesson both complete + push once. Reload resumes from `last_position`. Ad fires per rule, skip + click logged.
 
 ### PHASE 4 — Segment engine (Cursor)
 Event-driven transitions + daily pg_cron job for time-based segments + tag swap edge function + dfy suppression.

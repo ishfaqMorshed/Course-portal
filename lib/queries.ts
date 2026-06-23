@@ -98,10 +98,12 @@ export async function getCourseTree(courseId: string): Promise<{ course: Course 
       videoSource: r.video_source,
       description: r.description,
       resources: r.resources ?? [],
-      hasVideo: !!r.vimeo_id,
+      hasVideo: !!(r.vimeo_id && r.vimeo_id.trim()),
       duration: "",
       thumbLabel: "",
       progress: Number(r.pct),
+      lastPosition: Number(r.last_position ?? 0),
+      completed: r.completed_at != null,
     });
   }
   return { course, modules: Array.from(byModule.values()) };

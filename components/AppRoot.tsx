@@ -9,8 +9,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { computeStats, initialProgress, moduleOf, resumeLessonId, type ProgressMap } from "@/lib/course";
+import { computeStats, initialCompleted, initialProgress, moduleOf, resumeLessonId, type ProgressMap } from "@/lib/course";
 import { resolveRailUpsell, resolveSidebarPromo } from "@/lib/portal-map";
+import { completeLesson, pushLessonEvent } from "@/lib/progress";
 import { createClient } from "@/lib/supabase/client";
 import { CurrentUserProvider } from "@/lib/current-user";
 import type { CurrentUser, EnrolledCourse } from "@/lib/queries";
@@ -26,7 +27,6 @@ import CourseView from "@/components/screens/CourseView";
 import {
   TweakButton,
   TweakSection,
-  TweakSlider,
   TweakToggle,
   TweaksPanel,
   useTweaks,
@@ -34,7 +34,6 @@ import {
 
 const TWEAK_DEFAULTS = {
   emptyCourses: false,
-  simSeconds: 24,
 };
 
 type Screen = "login" | "dashboard" | "courses" | "resources" | "settings" | "course";
@@ -69,25 +68,47 @@ export default function AppRoot({
   const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [screen, setScreen] = useState<Screen>(authed ? "dashboard" : "login");
+  // Phase 3 progress model split: progressMap = watched pct (drives bars);
+  // completedSet = which lessons are DONE (drives every ✓ / done-count, since a
+  // lesson completes at 70% watched — pct < 100 can still be complete).
   const [progressMap, setProgressMap] = useState<ProgressMap>(() => initialProgress(modules));
+  const [completedSet, setCompletedSet] = useState<Set<string>>(() => initialCompleted(modules));
   const [currentLessonId, setCurrentLessonId] = useState<string>(() =>
-    resumeLessonId(modules, initialProgress(modules)),
+    resumeLessonId(modules, initialCompleted(modules)),
   );
   const [adSignal, setAdSignal] = useState(0);
 
   const displayName = initialUser?.name ?? "Learner";
   const sidebarPromo = resolveSidebarPromo(upsells);
-  const setLessonPct = (id: string, pct: number) => setProgressMap((m) => ({ ...m, [id]: pct }));
+
+  // Live watched-pct update — monotonic (never regress on a backward scrub) and
+  // a no-op when the rounded value is unchanged (avoids redundant re-renders).
+  const setLessonPct = (id: string, pct: number) =>
+    setProgressMap((m) => {
+      const cur = m[id] ?? 0;
+      const next = Math.max(cur, pct);
+      return next === cur ? m : { ...m, [id]: next };
+    });
+
+  // The single completion path (70%-auto AND manual button both call this).
+  // Optimistically mark done, then run the idempotent RPC; push to GHL only on a
+  // genuinely new completion (RPC reports newlyCompleted).
+  const markComplete = async (id: string) => {
+    setCompletedSet((s) => (s.has(id) ? s : new Set(s).add(id)));
+    const { newlyCompleted } = await completeLesson(id);
+    if (newlyCompleted) await pushLessonEvent(id);
+  };
 
   const completeAll = () => {
-    const m: ProgressMap = {};
-    modules.forEach((mod) => mod.lessons.forEach((l) => { m[l.id] = 100; }));
-    setProgressMap(m);
+    setCompletedSet(new Set(modules.flatMap((mod) => mod.lessons.map((l) => l.id))));
     setScreen("course");
   };
-  const resetProgress = () => setProgressMap(initialProgress(modules));
+  const resetProgress = () => {
+    setProgressMap(initialProgress(modules));
+    setCompletedSet(new Set());
+  };
   const openLesson = (id: string) => { setCurrentLessonId(id); setScreen("course"); };
-  const stats = computeStats(modules, progressMap);
+  const stats = computeStats(modules, completedSet);
 
   const logout = async () => {
     const supabase = createClient();
@@ -103,9 +124,6 @@ export default function AppRoot({
     if (!dev) return null;
     return (
       <TweaksPanel>
-        <TweakSection label="Player" />
-        <TweakSlider label="Demo video length" value={t.simSeconds} min={8} max={60} step={1} unit="s"
-          onChange={(v) => setTweak("simSeconds", v)} />
         <TweakSection label="Demo state" />
         <TweakToggle label="Empty My Courses" value={t.emptyCourses} onChange={(v) => setTweak("emptyCourses", v)} />
         <TweakButton label="Go to Dashboard" onClick={() => setScreen("dashboard")} />
@@ -139,7 +157,8 @@ export default function AppRoot({
     <CurrentUserProvider value={initialUser ?? null}>
       <AppShell {...shellProps} onNav={(id) => setScreen(id as Screen)} onLogout={logout} sidebarPromo={sidebarPromo}>
         {screen === "dashboard" && (
-          <Dashboard modules={modules} course={course} progressMap={progressMap} currentLessonId={currentLessonId}
+          <Dashboard modules={modules} course={course} progressMap={progressMap} completedSet={completedSet}
+            currentLessonId={currentLessonId}
             onResume={() => setScreen("course")} onOpenLesson={openLesson}
             onOpenCourse={() => setScreen("course")} upsellConfig={dashUpsell} />
         )}
@@ -151,9 +170,10 @@ export default function AppRoot({
         {screen === "settings" && <SettingsScreen onLogout={logout} />}
         {screen === "course" && (
           <CourseView modules={modules} course={course} upsells={upsells} adRules={adRules}
-            progressMap={progressMap} setLessonPct={setLessonPct}
+            progressMap={progressMap} completedSet={completedSet}
+            setLessonPct={setLessonPct} markComplete={markComplete}
             currentLessonId={currentLessonId} setCurrentLessonId={setCurrentLessonId}
-            onLogout={logout} adSignal={adSignal} simSeconds={t.simSeconds} dev={dev} />
+            onLogout={logout} adSignal={adSignal} dev={dev} />
         )}
       </AppShell>
       {tweaksPanel()}

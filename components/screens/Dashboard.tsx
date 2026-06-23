@@ -41,6 +41,7 @@ export default function Dashboard({
   modules,
   course,
   progressMap,
+  completedSet,
   currentLessonId,
   onResume,
   onOpenLesson,
@@ -50,6 +51,7 @@ export default function Dashboard({
   modules: Module[];
   course: Course | null;
   progressMap: ProgressMap;
+  completedSet: Set<string>;
   currentLessonId: string;
   onResume: () => void;
   onOpenLesson: (id: string) => void;
@@ -58,7 +60,7 @@ export default function Dashboard({
 }) {
   void onOpenCourse;
   const ls = allLessons(modules);
-  const stats = computeStats(modules, progressMap);
+  const stats = computeStats(modules, completedSet);
   const courseTitle = course?.title ?? "";
   const resumeLesson = findLesson(modules, currentLessonId) || ls[0];
 
@@ -73,7 +75,7 @@ export default function Dashboard({
   }
 
   const currentMod = moduleOf(modules, resumeLesson.id);
-  const upNext = ls.filter((l) => (progressMap[l.id] ?? 0) < 100).slice(0, 6);
+  const upNext = ls.filter((l) => !completedSet.has(l.id)).slice(0, 6);
 
   return (
     <div className="px-6 lg:px-9 py-7">
@@ -92,14 +94,16 @@ export default function Dashboard({
           {/* up next */}
           <ScrollRow label="Up next">
             {upNext.map((l) => (
-              <LessonThumbCard key={l.id} lesson={l} width={210} progress={progressMap[l.id] ?? 0} onClick={() => onOpenLesson(l.id)} />
+              <LessonThumbCard key={l.id} lesson={l} width={210} progress={progressMap[l.id] ?? 0}
+                completed={completedSet.has(l.id)} onClick={() => onOpenLesson(l.id)} />
             ))}
           </ScrollRow>
         </div>
 
         {/* right rail */}
         <aside className="w-full xl:w-[320px] shrink-0 flex flex-col gap-5">
-          <ModuleProgressRail modules={modules} progressMap={progressMap} currentModuleId={currentMod?.id ?? ""} pctTotal={stats.pct}
+          <ModuleProgressRail modules={modules} progressMap={progressMap} completedSet={completedSet}
+            currentModuleId={currentMod?.id ?? ""} pctTotal={stats.pct}
             onSelectModule={(m) => m.lessons[0] && onOpenLesson(m.lessons[0].id)} />
           <UpsellPanel config={upsellConfig} />
         </aside>

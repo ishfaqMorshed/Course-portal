@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { allLessons, findLesson, moduleOf, nextLessonId } from "@/lib/course";
-import { resolveAdRule, resolveCompletionUpsell, resolveRailUpsell } from "@/lib/portal-map";
+import { adShouldFire, resolveAdRule, resolveCompletionUpsell, resolveRailUpsell } from "@/lib/portal-map";
+import { track } from "@/lib/track";
 import LessonThumbCard from "@/components/ui/LessonThumbCard";
 import ScrollRow from "@/components/ui/ScrollRow";
 import ProgressPill from "@/components/ui/ProgressPill";
 import ResourceRow from "@/components/ui/ResourceRow";
 import Toast from "@/components/ui/Toast";
-import { BtnPrimary } from "@/components/ui/Buttons";
-import VideoEmbed from "@/components/player/VideoEmbed";
+import { BtnPrimary, BtnSecondary } from "@/components/ui/Buttons";
+import LessonPlayer, { type LessonPlayerHandle } from "@/components/player/LessonPlayer";
 import AdOverlay from "@/components/ad/AdOverlay";
 import UpsellPanel from "@/components/upsell/UpsellPanel";
 import {
@@ -33,6 +34,7 @@ function ModuleGroup({
   module,
   idx,
   progressMap,
+  completedSet,
   currentLessonId,
   onSelect,
   defaultOpen,
@@ -40,13 +42,14 @@ function ModuleGroup({
   module: Module;
   idx: number;
   progressMap: ProgressMap;
+  completedSet: Set<string>;
   currentLessonId: string;
   onSelect: (id: string) => void;
   defaultOpen: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => { if (defaultOpen) setOpen(true); }, [defaultOpen]);
-  const done = module.lessons.filter((l) => (progressMap[l.id] ?? 0) >= 100).length;
+  const done = module.lessons.filter((l) => completedSet.has(l.id)).length;
   const total = module.lessons.length;
   const moduleDone = total > 0 && done === total;
   const isCurrent = module.lessons.some((l) => l.id === currentLessonId);
@@ -67,7 +70,7 @@ function ModuleGroup({
         <div className="pb-2 flex flex-col">
           {module.lessons.map((l) => {
             const p = progressMap[l.id] ?? 0;
-            const state = p >= 100 ? "done" : p > 0 ? "partial" : "todo";
+            const state = completedSet.has(l.id) ? "done" : p > 0 ? "partial" : "todo";
             const active = l.id === currentLessonId;
             return (
               <button key={l.id} onClick={() => onSelect(l.id)}
@@ -109,12 +112,13 @@ export default function CourseView({
   upsells,
   adRules,
   progressMap,
+  completedSet,
   setLessonPct,
+  markComplete,
   currentLessonId,
   setCurrentLessonId,
   onLogout,
   adSignal,
-  simSeconds,
   dev,
 }: {
   modules: Module[];
@@ -122,28 +126,59 @@ export default function CourseView({
   upsells: UpsellRow[];
   adRules: AdRuleRow[];
   progressMap: ProgressMap;
+  completedSet: Set<string>;
   setLessonPct: (id: string, pct: number) => void;
+  markComplete: (id: string) => void;
   currentLessonId: string;
   setCurrentLessonId: (id: string) => void;
   onLogout?: () => void;
   adSignal: number;
-  simSeconds: number;
   dev: boolean;
 }) {
   void onLogout; // kept for parity with the export's signature
   const ls = allLessons(modules);
   const lesson = findLesson(modules, currentLessonId) || ls[0];
   const [adOpen, setAdOpen] = useState(false);
-  const [adShownFor, setAdShownFor] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<string | null>(null);
+  const playerRef = useRef<LessonPlayerHandle>(null);
+  // Once-per-lesson-per-session ad guard (a ref so a backward scrub never
+  // re-triggers — CONNECTION-MAP §4.5 — without forcing a re-render).
+  const adFiredRef = useRef<Record<string, boolean>>({});
 
   const ad = lesson ? resolveAdRule(adRules, lesson.id, moduleOf(modules, lesson.id)?.id ?? null) : undefined;
+  const courseId = course?.id ?? null;
 
-  useEffect(() => { if (adSignal > 0 && ad) setAdOpen(true); }, [adSignal, ad]);
+  const closeAd = () => { setAdOpen(false); playerRef.current?.play(); };
+  const onAdSkip = () => { void track("ad_skip", { lesson_id: lesson?.id }, courseId); closeAd(); };
+  // ad_click: track + open; AdOverlay's own onClose handles resume after its
+  // "Opening…" animation, so we don't close here.
+  const onAdClick = (url: string) => {
+    void track("ad_click", { lesson_id: lesson?.id }, courseId);
+    if (url) window.open(url, "_blank");
+  };
+
+  // Real player progress (provider-agnostic): live pct bar + ad firing on the
+  // rule's pct/timestamp_s against real seconds.
+  const handleProgress = (percent: number, seconds: number) => {
+    if (!lesson) return;
+    setLessonPct(lesson.id, Math.round(percent * 100));
+    if (ad && !adOpen && !adFiredRef.current[lesson.id] && adShouldFire(ad, percent, seconds)) {
+      adFiredRef.current[lesson.id] = true;
+      playerRef.current?.pause();
+      setAdOpen(true);
+      void track("ad_view", { lesson_id: lesson.id }, courseId);
+    }
+  };
+
+  // Dev "Trigger pop-ad" affordance — opens the overlay + pauses, no event.
+  useEffect(() => {
+    if (adSignal > 0 && ad) { setAdOpen(true); playerRef.current?.pause(); }
+  }, [adSignal, ad]);
+
   useEffect(() => {
     if (!lesson) return;
     const p = progressMap[lesson.id] ?? 0;
-    if (p > 0 && p < 100) {
+    if (!completedSet.has(lesson.id) && p > 0) {
       setToast("Continuing where you left off — " + Math.round(p) + "% watched");
       const t = setTimeout(() => setToast(null), 3200);
       return () => clearTimeout(t);
@@ -162,8 +197,8 @@ export default function CourseView({
   }
 
   const module = moduleOf(modules, lesson.id)!;
-  const courseComplete = ls.length > 0 && ls.every((l) => (progressMap[l.id] ?? 0) >= 100);
-  const closeAd = () => { setAdOpen(false); setAdShownFor((s) => ({ ...s, [lesson.id]: true })); };
+  const courseComplete = ls.length > 0 && ls.every((l) => completedSet.has(l.id));
+  const lessonDone = completedSet.has(lesson.id);
 
   const upsellConfig = courseComplete
     ? resolveCompletionUpsell(upsells)
@@ -177,7 +212,8 @@ export default function CourseView({
       <div className="px-6 lg:px-9 pt-6 pb-5 border-b border-line">
         <ScrollRow label="All Lessons">
           {ls.map((l) => (
-            <LessonThumbCard key={l.id} lesson={l} width={196} progress={progressMap[l.id] ?? 0} onClick={() => setCurrentLessonId(l.id)} />
+            <LessonThumbCard key={l.id} lesson={l} width={196} progress={progressMap[l.id] ?? 0}
+              completed={completedSet.has(l.id)} onClick={() => setCurrentLessonId(l.id)} />
           ))}
         </ScrollRow>
       </div>
@@ -187,7 +223,7 @@ export default function CourseView({
         <aside className="lg:w-[260px] shrink-0 border-b lg:border-b-0 lg:border-r border-line">
           <div className="px-4 pt-5 pb-3"><div className="text-xs font-semibold uppercase tracking-wide text-textSecondary">Course content</div></div>
           {modules.map((m, i) => (
-            <ModuleGroup key={m.id} module={m} idx={i} progressMap={progressMap}
+            <ModuleGroup key={m.id} module={m} idx={i} progressMap={progressMap} completedSet={completedSet}
               currentLessonId={lesson.id} defaultOpen={m.id === module.id}
               onSelect={(id) => setCurrentLessonId(id)} />
           ))}
@@ -205,13 +241,39 @@ export default function CourseView({
               {courseComplete ? (
                 <CompletionPanel total={ls.length} courseTitle={course?.title ?? "this course"} />
               ) : lesson.hasVideo ? (
-                <div className="relative">
-                  <VideoEmbed source={lesson.videoSource} url={lesson.vimeoId ?? ""} title={lesson.title} />
-                  {adOpen && ad && (
-                    <AdOverlay assetUrl={ad.assetUrl} headline={ad.headline} ctaLabel={ad.ctaLabel} ctaUrl={ad.ctaUrl}
-                      skippableAfterS={ad.skippableAfterS} onSkip={closeAd} onClose={closeAd}
-                      onClick={(url) => url && window.open(url, "_blank")} />
-                  )}
+                <div className="flex flex-col gap-3">
+                  <div className="relative">
+                    <LessonPlayer
+                      key={lesson.id}
+                      ref={playerRef}
+                      lessonId={lesson.id}
+                      source={lesson.videoSource}
+                      url={lesson.vimeoId ?? ""}
+                      title={lesson.title}
+                      initialPct={progressMap[lesson.id] ?? 0}
+                      lastPosition={lesson.lastPosition ?? 0}
+                      alreadyComplete={lessonDone}
+                      onProgress={handleProgress}
+                      onFirstPlay={() => void track("lesson_started", { lesson_id: lesson.id }, courseId)}
+                      onAutoComplete={() => markComplete(lesson.id)}
+                    />
+                    {adOpen && ad && (
+                      <AdOverlay assetUrl={ad.assetUrl} headline={ad.headline} ctaLabel={ad.ctaLabel} ctaUrl={ad.ctaUrl}
+                        skippableAfterS={ad.skippableAfterS} onSkip={onAdSkip} onClose={closeAd}
+                        onClick={onAdClick} />
+                    )}
+                  </div>
+                  {/* Manual completion — universal (Phase 3): override for video lessons. */}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-textSecondary">
+                      {lessonDone ? "Lesson complete" : "Auto-completes at 70% watched"}
+                    </span>
+                    {lessonDone ? (
+                      <span className="inline-flex items-center gap-1.5 text-success text-sm font-semibold"><IconCheckCircle size={16} /> Completed</span>
+                    ) : (
+                      <BtnSecondary onClick={() => markComplete(lesson.id)}><IconCheck size={15} /> Mark complete</BtnSecondary>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="bg-subtle rounded-2xl p-10 flex flex-col items-center text-center gap-4">
@@ -220,10 +282,10 @@ export default function CourseView({
                     <div className="text-[15px] font-semibold text-textPrimary">This lesson has no video</div>
                     <p className="text-sm text-textSecondary mt-1 max-w-[360px]">Work through the materials below, then mark the lesson complete yourself.</p>
                   </div>
-                  {(progressMap[lesson.id] ?? 0) >= 100 ? (
+                  {lessonDone ? (
                     <div className="inline-flex items-center gap-2 text-success text-sm font-semibold"><IconCheckCircle size={17} /> Completed</div>
                   ) : (
-                    <BtnPrimary onClick={() => setLessonPct(lesson.id, 100)}><IconCheck size={16} /> Mark complete</BtnPrimary>
+                    <BtnPrimary onClick={() => markComplete(lesson.id)}><IconCheck size={16} /> Mark complete</BtnPrimary>
                   )}
                 </div>
               )}
@@ -251,8 +313,8 @@ export default function CourseView({
               {/* dev-only ad-trigger hint (gated by ?dev=1) */}
               {dev && !courseComplete && lesson.hasVideo && (
                 <div className="border-[1.5px] border-dashed border-canvasDeep rounded-2xl px-4 py-3 flex items-center justify-between">
-                  <span className="font-mono text-[11px] text-textSecondary">{ad ? `dev: live ad_rule (${ad.triggerType}=${ad.triggerValue}) — auto-fire is Phase 3` : "dev: no active ad rule for this lesson"}</span>
-                  {ad && <button onClick={() => setAdOpen(true)} className="font-mono text-[11px] font-semibold text-primary underline">trigger ad now</button>}
+                  <span className="font-mono text-[11px] text-textSecondary">{ad ? `dev: live ad_rule — fires at ${ad.triggerType === "pct" ? ad.triggerValue + "%" : ad.triggerValue + "s"}` : "dev: no active ad rule for this lesson"}</span>
+                  {ad && <button onClick={() => { setAdOpen(true); playerRef.current?.pause(); }} className="font-mono text-[11px] font-semibold text-primary underline">trigger ad now</button>}
                 </div>
               )}
             </main>

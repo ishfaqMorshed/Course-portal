@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { track } from "@/lib/track";
 import { useRouter } from "next/navigation";
 import { IconMail, IconZap } from "@/components/icons";
 
@@ -61,6 +62,9 @@ export default function LoginScreen({ dev }: { dev: boolean }) {
       setErrorMsg("Email or password is incorrect.");
       return;
     }
+    // CONNECTION-MAP §2: successful auth → `login` event (may transition
+    // never_activated → not_started in Phase 4). Best-effort, before redirect.
+    await track("login", { method: "password" });
     // Admins land on the admin dashboard; everyone else on the portal. (Admins
     // keep portal access via the "Portal" link — no forced global redirect.)
     const { data: admin } = await supabase.rpc("is_admin");

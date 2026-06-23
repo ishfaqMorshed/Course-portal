@@ -40,7 +40,10 @@ export interface Lesson {
   hasVideo: boolean; // runtime-only, not a DB column (derived: vimeoId != null)
   duration: string; // runtime-only, not a DB column (presentation label, e.g. "14 min" / "Read")
   thumbLabel: string; // runtime-only, not a DB column (placeholder art label)
-  progress: number; // runtime-only, not a DB column (comes from lesson_progress.pct in Phase 3)
+  progress: number; // lesson_progress.pct (0..100) — hydrated from get_course_tree (Phase 3)
+  // Phase 3 live-path fields (always set by get_course_tree; legacy fixtures omit them).
+  lastPosition?: number; // lesson_progress.last_position (seconds) — player resume
+  completed?: boolean; // derived: lesson_progress.completed_at IS NOT NULL (completion model)
 }
 
 // modules(id, course_id, sort, title)

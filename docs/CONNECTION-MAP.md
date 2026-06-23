@@ -42,7 +42,7 @@ Rule: GHL credentials never reach the browser. All GHL calls go through Edge Fun
 |---|---|---|
 | Successful auth callback | `login` | may transition never_activated → not_started |
 | First `play` on a lesson | `lesson_started` | may transition not_started → active |
-| Vimeo `timeupdate` ≥ 90% (once) OR manual button | `lesson_completed` | set lesson_progress.completed_at · **call edge fn `push-lesson-event` → GHL webhook (D3)** · if all lessons done → emit `course_completed` |
+| Player `timeupdate`/poll ≥ 70% (once) OR manual "Mark complete" button (every lesson) | `lesson_completed` | set lesson_progress.completed_at · **call edge fn `push-lesson-event` → GHL webhook (D3)** · if all lessons done → emit `course_completed` |
 | All lessons complete | `course_completed` | transition → completer |
 | Upsell panel rendered for new module | `upsell_view` | none |
 | Upsell CTA click | `upsell_click` | log; window.open(cta_url) |
@@ -51,20 +51,20 @@ Rule: GHL credentials never reach the browser. All GHL calls go through Edge Fun
 
 Implementation rule: ONE client helper `track(type, payload)` inserts into `events` (RLS: user can insert own rows only). Postgres trigger on `events` calls segment-transition function for the event-driven transitions; never compute segments in the client.
 
-## 3. Vimeo player wiring (S3 center)
+## 3. Player wiring (S3 center) — multi-provider (Phase 3)
+
+A `LessonPlayer` wrapper switches on `lessons.video_source` to one of three adapters behind a common `{percent, seconds, duration}` interface (Vimeo `@vimeo/player`, YouTube IFrame API poll, HTML5 `<video>`). Provider-agnostic logic:
 
 ```ts
-import Player from '@vimeo/player';
-const p = new Player(iframeEl);
-p.on('play',  () => once(track('lesson_started')));
-p.on('timeupdate', ({percent, seconds}) => {
-  throttle10s(saveProgress(lesson_id, seconds, percent)); // upsert lesson_progress
-  if (percent >= 0.9) once(completeLesson(lesson_id));     // rpc → event + GHL push
+adapter.onFirstPlay(() => once(track('lesson_started')));
+adapter.onProgress(({percent, seconds, duration}) => {
+  throttle10s(saveProgress(lesson_id, {seconds, pct: percent*100, lastPosition: seconds})); // upsert lesson_progress
+  if (percent >= 0.70) once(completeLesson(lesson_id));    // rpc → event(s); push only when newly completed
   checkAdRules(percent, seconds);                          // section 4
 });
-p.on('loaded', () => p.setCurrentTime(last_position));     // resume
+// resume: adapter.seekTo(last_position) on load
 ```
-`once()` = fire exactly one time per lesson per session; server side also enforces idempotency (unique partial index on completed events).
+Manual "Mark complete" (rendered on every lesson) hits the same `completeLesson(lesson_id)` path. `once()` = fire exactly one time per lesson per session; server side also enforces idempotency (unique partial index on `lesson_completed`/`course_completed` events + completed_at-only-if-null in `complete_lesson`).
 
 ## 4. Ad engine wiring (O1)
 

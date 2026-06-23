@@ -9,14 +9,16 @@ export default function LessonThumbCard({
   lesson,
   onClick,
   progress = 0,
+  completed,
   width,
 }: {
   lesson: Lesson;
   onClick?: () => void;
   progress?: number;
+  completed?: boolean; // Phase 3: "done" comes from completion, not pct >= 100
   width?: number;
 }) {
-  const done = progress >= 100;
+  const done = completed ?? progress >= 100;
   return (
     <button onClick={onClick} style={width ? { width } : undefined} className="group text-left shrink-0 flex flex-col gap-2.5">
       <div className="relative rounded-[14px] overflow-hidden aspect-[16/10]">
@@ -28,8 +30,8 @@ export default function LessonThumbCard({
         <span className={"absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center transition-transform group-hover:scale-105 " + (done ? "bg-success text-white" : "bg-white/85 text-primary")}>
           {done ? <IconCheck size={16} strokeWidth={2.5} /> : <IconPlay size={14} className="ml-0.5" />}
         </span>
-        {progress > 0 && progress < 100 && (
-          <div className="absolute inset-x-0 bottom-0 h-1 bg-white/30"><div className="h-full bg-primary" style={{ width: progress + "%" }}></div></div>
+        {!done && progress > 0 && (
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-white/30"><div className="h-full bg-primary" style={{ width: Math.min(progress, 100) + "%" }}></div></div>
         )}
       </div>
       <div className="text-[13px] font-semibold text-textPrimary leading-snug group-hover:text-primary transition-colors line-clamp-2">{lesson.title}</div>

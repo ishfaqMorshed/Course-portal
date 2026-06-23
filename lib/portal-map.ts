@@ -88,10 +88,11 @@ export function resolveAdRule(
   };
 }
 
-// Map a resolved ad's trigger to the mock player's pct axis (Phase 2.7): pct
-// rules use the value directly; timestamp_s is approximated against the demo
-// length (simSeconds). Exact seconds = Phase 3 real player.
-export function mockTriggerPct(ad: ResolvedAd, simSeconds: number): number {
-  if (ad.triggerType === "pct") return Math.min(100, Math.max(0, ad.triggerValue));
-  return Math.min(100, Math.max(0, (ad.triggerValue / Math.max(1, simSeconds)) * 100));
+// Should a resolved ad fire at the given playback point? Phase 3 evaluates the
+// trigger against the REAL player signal (provider-agnostic): pct rules compare
+// percent watched, timestamp_s rules compare elapsed seconds. (Phase 2.7's
+// mockTriggerPct pct-approximation is retired now that seconds are real.)
+export function adShouldFire(ad: ResolvedAd, percent: number, seconds: number): boolean {
+  if (ad.triggerType === "pct") return percent * 100 >= ad.triggerValue;
+  return seconds >= ad.triggerValue;
 }

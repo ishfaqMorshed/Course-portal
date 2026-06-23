@@ -20,7 +20,10 @@ Read `docs/MASTER.md` and `docs/CONNECTION-MAP.md` in full. They are the single 
 5. Print the EXIT test steps. Stop. Do not start the next phase.
 6. On approval, commit with git (message: "phase N complete").
 
+## Git workflow
+After verifying any phase passes its EXIT test, Claude Code commits with a descriptive message at every phase gate so work is never lost across machines. The human runs `git push` from their own terminal, where the GitHub credentials live — Claude Code does not push.
+
 ## Stack
 Next.js 14 (App Router) · TypeScript · Tailwind · Supabase (Auth, Postgres, pg_cron + pg_net, Edge Functions) · Vimeo Player API · Vercel. No Video.js. No localStorage in the client.
 
-## Current phase: 1.5
+## Current phase: 3

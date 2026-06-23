@@ -8,12 +8,14 @@ import type { Module, ProgressMap } from "@/lib/types";
 export default function ModuleProgressRail({
   modules,
   progressMap,
+  completedSet,
   currentModuleId,
   onSelectModule,
   pctTotal,
 }: {
   modules: Module[];
   progressMap: ProgressMap;
+  completedSet: Set<string>;
   currentModuleId: string;
   onSelectModule?: (m: Module) => void;
   pctTotal: number;
@@ -27,9 +29,9 @@ export default function ModuleProgressRail({
       <ProgressPill pct={pctTotal} className="mt-3 mb-4" />
       <div className="flex flex-col">
         {modules.map((m, i) => {
-          const done = m.lessons.filter((l) => (progressMap[l.id] ?? 0) >= 100).length;
+          const done = m.lessons.filter((l) => completedSet.has(l.id)).length;
           const total = m.lessons.length;
-          const moduleDone = done === total;
+          const moduleDone = total > 0 && done === total;
           const isCurrent = m.id === currentModuleId;
           const started = m.lessons.some((l) => (progressMap[l.id] ?? 0) > 0);
           return (
