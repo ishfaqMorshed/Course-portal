@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Button, ErrorText, Field, Select, TextArea, TextInput } from "@/components/admin/ui";
+import dynamic from "next/dynamic";
+import { Button, ErrorText, Field, Select, TextInput } from "@/components/admin/ui";
 import { deleteLesson, updateLesson } from "@/lib/admin/queries";
 import { uploadThumbnail } from "@/lib/admin/storage";
 import type { LessonResource, LessonRow, VideoSource } from "@/lib/admin/types";
 import { cleanUrlOrThrow } from "@/lib/url";
+import { isEmptyHtml, toHtml } from "@/lib/richtext";
+
+// TipTap must not render on the server (ProseMirror needs the DOM).
+const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor"), { ssr: false });
 
 const KINDS = ["pdf", "txt", "zip", "link", "other"];
 const SOURCES: { value: VideoSource; label: string }[] = [
@@ -32,7 +37,7 @@ export default function LessonEditor({
   const [title, setTitle] = useState(lesson.title);
   const [source, setSource] = useState<VideoSource>(lesson.video_source ?? "vimeo");
   const [ref, setRef] = useState(lesson.vimeo_id ?? "");
-  const [description, setDescription] = useState(lesson.description ?? "");
+  const [description, setDescription] = useState(toHtml(lesson.description)); // HTML (legacy text converted)
   const [resources, setResources] = useState<LessonResource[]>(lesson.resources ?? []);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(lesson.thumbnail_url ?? null);
   const [uploading, setUploading] = useState(false);
@@ -70,7 +75,7 @@ export default function LessonEditor({
         title: title.trim(),
         video_source: source,
         vimeo_id: ref.trim() || null, // pasted URL or bare ID, stored as-is
-        description: description.trim() ? description.trim() : null,
+        description: isEmptyHtml(description) ? null : description,
         resources: cleanRes,
         thumbnail_url: thumbnailUrl,
       });
@@ -114,7 +119,8 @@ export default function LessonEditor({
         </Field>
       </div>
       <div className="mt-4">
-        <Field label="Description"><TextArea value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+        <span className="block text-[13px] font-semibold text-textPrimary mb-1.5">Description</span>
+        <RichTextEditor value={description} onChange={setDescription} placeholder="What the student will learn in this lesson…" />
       </div>
 
       <div className="mt-4">
